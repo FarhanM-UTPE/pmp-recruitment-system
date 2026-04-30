@@ -440,12 +440,22 @@ class CandidateController extends Controller
 
         // --- DUPLICATE LOGIC ---
         // Find candidates who applied more than once in the same year
-        $duplicateCandidateQuery = Application::select('candidate_id')
-            ->groupBy('candidate_id', 'mpp_year')
-            ->havingRaw('COUNT(*) > 1');
+        // $duplicateCandidateQuery = Application::select('candidate_id')
+        //     ->groupBy('candidate_id', 'mpp_year')
+        //     ->havingRaw('COUNT(*) > 1');
+
+        // if ($selectedYear) {
+        //     $duplicateCandidateQuery->where('mpp_year', $selectedYear);
+        // }
+
+        // $duplicateCandidateIds = $duplicateCandidateQuery->pluck('candidate_id');
+
+        $duplicateCandidateQuery = Application::select('candidate_id', 'mpp_year')
+        ->groupBy('applications.candidate_id', 'applications.mpp_year')
+        ->havingRaw('COUNT(*) > 1');
 
         if ($selectedYear) {
-            $duplicateCandidateQuery->where('mpp_year', $selectedYear);
+            $duplicateCandidateQuery->where('applications.mpp_year', $selectedYear);
         }
 
         $duplicateCandidateIds = $duplicateCandidateQuery->pluck('candidate_id');
@@ -456,16 +466,29 @@ class CandidateController extends Controller
                 $statsQuery->whereIn('applications.candidate_id', $duplicateCandidateIds);
                 
                 // If we're looking at all years, ensure we only show the years that are duplicate
+                // if (!$selectedYear) {
+                //     $duplicateCondition = function($q) {
+                //         $q->select('candidate_id', 'mpp_year')
+                //           ->from('applications')
+                //           ->groupBy('candidate_id', 'mpp_year')
+                //           ->havingRaw('COUNT(*) > 1');
+                //     };
+                //     $query->whereIn(DB::raw('(candidate_id, mpp_year)'), $duplicateCondition);
+                //     $statsQuery->whereIn(DB::raw('(candidate_id, mpp_year)'), $duplicateCondition);
+                // }
+
                 if (!$selectedYear) {
                     $duplicateCondition = function($q) {
-                        $q->select('candidate_id', 'mpp_year')
-                          ->from('applications')
-                          ->groupBy('candidate_id', 'mpp_year')
-                          ->havingRaw('COUNT(*) > 1');
+                        $q->select('applications.candidate_id', 'applications.mpp_year')
+                        ->from('applications')
+                        ->groupBy('applications.candidate_id', 'applications.mpp_year')
+                        ->havingRaw('COUNT(*) > 1');
                     };
-                    $query->whereIn(DB::raw('(candidate_id, mpp_year)'), $duplicateCondition);
-                    $statsQuery->whereIn(DB::raw('(candidate_id, mpp_year)'), $duplicateCondition);
+
+                    $query->whereIn(DB::raw('(applications.candidate_id, applications.mpp_year)'), $duplicateCondition);
+                    $statsQuery->whereIn(DB::raw('(applications.candidate_id, applications.mpp_year)'), $duplicateCondition);
                 }
+
             } elseif ($request->type === 'organic') {
                 $query->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'Yes'); });
                 $statsQuery->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'Yes'); });
@@ -545,7 +568,8 @@ class CandidateController extends Controller
         // --- Data for View ---
         $statuses = [ 'ON_PROCESS' => 'Proses', 'HIRED' => 'Lulus', 'FAILED' => 'Tidak Lulus', 'CANCEL' => 'Cancel' ];
         $stats = [
-            'total_candidates' => (clone $statsQuery)->distinct('candidate_id')->count('candidate_id'),
+            // 'total_candidates' => (clone $statsQuery)->distinct('candidate_id')->count('candidate_id'),
+            'total_candidates' => (clone $statsQuery)->count(),
             'candidates_in_process' => (clone $statsQuery)->where('overall_status', 'PROSES')->count(),
             'candidates_passed' => (clone $statsQuery)->where('overall_status', 'LULUS')->count(),
             'candidates_failed' => (clone $statsQuery)->where('overall_status', 'DITOLAK')->count(),

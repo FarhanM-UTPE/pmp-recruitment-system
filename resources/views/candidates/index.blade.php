@@ -25,6 +25,7 @@
         @endcan
     </div>
 </div>
+
 @canany(['view-candidates', 'view-own-department-candidates'])
     {{-- This scope initializes and contains all Alpine.js logic for this page --}}
     <div x-data="candidatesPage()" x-init="init(); $store.candidates.selectedIds = [];" id="candidates-scope" x-cloak>

@@ -335,7 +335,7 @@ class Candidate extends Model
             $previousStageDate = $previousStage && $previousStage->scheduled_date ? $previousStage->scheduled_date->format('Y-m-d') : null;
             
             // Check if this stage was edited
-            $isEdited = $stage && $stage->original_scheduled_date !== null && $stage->original_scheduled_date->format('Y-m-d') !== $stage->scheduled_date->format('Y-m-d');
+            $isEdited = false;
             
             // Can edit result only if next stage doesn't exist yet
             $canEditResult = !$nextStageExists;
@@ -374,7 +374,6 @@ class Candidate extends Model
                 'status' => $currentStageStatus,
                 'result' => $stageStatus,
                 'date' => $stage?->scheduled_date ? $stage->scheduled_date->format('Y-m-d') : null,
-                'original_date' => ($stage && $stage->original_scheduled_date) ? $stage->original_scheduled_date->format('Y-m-d') : null,
                 'notes' => $stage?->notes ?? null,
                 'evaluator' => $stage?->conductedByUser->name ?? null,
                 'next_stage_exists' => $nextStageExists,
