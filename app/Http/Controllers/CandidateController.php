@@ -587,6 +587,9 @@ class CandidateController extends Controller
                 $q->where('year', $selectedYear);
             }
         }])
+        ->when($user->department_id, function ($q) use ($user) {
+            $q->where('department_id', $user->department_id);
+        })
         ->withCount(['applications' => function ($q) use ($selectedYear) {
             if ($selectedYear) {
                 $q->where('mpp_year', $selectedYear);
