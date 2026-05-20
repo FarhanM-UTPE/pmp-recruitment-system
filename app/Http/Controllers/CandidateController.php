@@ -362,6 +362,7 @@ class CandidateController extends Controller
         $query = Application::query()
             ->select('applications.*') 
             ->join('candidates', 'applications.candidate_id', '=', 'candidates.id')
+            ->join('vacancies', 'applications.vacancy_id', '=', 'vacancies.id')
             ->with([
                 'candidate.department',
                 'candidate.latestPsikotest',
@@ -370,7 +371,9 @@ class CandidateController extends Controller
                 'stages',
             ]);
 
-        $statsQuery = Application::query();
+        $statsQuery = Application::query()
+            ->join('candidates', 'applications.candidate_id', '=', 'candidates.id')
+            ->join('vacancies', 'applications.vacancy_id', '=', 'vacancies.id');
 
         // 3. Evaluation Global Filters
         if ($selectedYear) {
@@ -411,7 +414,49 @@ class CandidateController extends Controller
                 $query->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'No'); });
                 $statsQuery->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'No'); });
             }
+              elseif ($request->type === 'non-duplicate') {
+               $query->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
+               $statsQuery->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
+            }
         }
+
+        if ($request->boolean('not_moved')) {
+            $query->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                  ->from('applications as sub_app')
+                  ->whereRaw('sub_app.candidate_id = applications.candidate_id')
+                  ->where('sub_app.overall_status', 'PINDAH');
+            });
+            $statsQuery->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                  ->from('applications as sub_app')
+                  ->whereRaw('sub_app.candidate_id = applications.candidate_id')
+                  ->where('sub_app.overall_status', 'PINDAH');
+            });
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $filterSearch = function($q) use ($search) {
+                $q->where('candidates.nama', 'like', "%{$search}%")
+                  ->orWhere('candidates.applicant_id', 'like', "%{$search}%")
+                  ->orWhere('candidates.alamat_email', 'like', "%{$search}%");
+            };
+            $query->where($filterSearch);
+            $statsQuery->where($filterSearch);
+        }
+        
+        if ($request->filled('department_id')) { 
+            $query->where('candidates.department_id', $request->department_id);
+            $statsQuery->where('candidates.department_id', $request->department_id);
+        }
+        
+        if ($request->filled('source')) { 
+            $query->where('candidates.source', $request->source);
+            $statsQuery->where('candidates.source', $request->source);
+        }
+
+
 
         // if ($request->filled('status')) {
         //     $status = strtoupper($request->status);
@@ -425,6 +470,7 @@ class CandidateController extends Controller
         //     $query->where('applications.overall_status', $overallStatus);
         //     $statsQuery->where('applications.overall_status', $overallStatus);
         // }
+        
         // ==========================================
         // DYNAMIC STATUS & STAGE FILTERING (SYNCED WITH CARDS)
         // ==========================================
