@@ -28,7 +28,7 @@ class StatisticsController extends Controller
         }
 
         if ($startDate && $endDate) {
-            $baseQuery->whereBetween('created_at', [$startDate, $endDate]);
+            $baseQuery->whereBetween('applications.created_at', [$startDate, $endDate]);
         }
 
         if ($source) {
@@ -50,6 +50,18 @@ class StatisticsController extends Controller
 
         $sources = Candidate::whereNotNull('source')->distinct()->pluck('source');
 
+        // $activeVacanciesQuery = \App\Models\Vacancy::whereHas('mppSubmissions', function ($q) {
+        //     $q->where('proposal_status', 'approved');
+        // })->with(['mppSubmissions' => function ($q) {
+        //     $q->where('proposal_status', 'approved');
+        // }, 'recruitmentSummaries']);
+
+        // if ($user->hasRole('kepala departemen') && $user->department_id) {
+        //     $activeVacanciesQuery->where('department_id', $user->department_id);
+        // }
+
+        // $activeVacancies = $activeVacanciesQuery->get();
+
         return view('statistics.index', compact(
             'kpiData',
             'funnelData',
@@ -63,54 +75,74 @@ class StatisticsController extends Controller
             'sources',
             'startDate',
             'endDate',
-            'source'
+            'source',
+            // 'activeVacancies'
         ));
     }
+
+    // private function getKpiData($query)
+    // {
+    //     $totalApplications = (clone $query)->count();
+    //     $hiredApplicationsQuery = (clone $query)->where('overall_status', 'LULUS');
+    //     $totalHired = $hiredApplicationsQuery->count();
+
+    //     $avgTimeToHire = $hiredApplicationsQuery->selectRaw('AVG(DATEDIFF(hired_date, created_at)) as avg_days')
+    //         ->value('avg_days');
+
+    //     return [
+    //         'total_applications' => $totalApplications,
+    //         'total_hired' => $totalHired,
+    //         'avg_time_to_hire' => round($avgTimeToHire ?? 0),
+    //         'conversion_rate' => $totalApplications > 0 ? round(($totalHired / $totalApplications) * 100, 1) : 0,
+    //     ];
+    // }
 
     private function getKpiData($query)
     {
         $totalApplications = (clone $query)->count();
-        $hiredApplicationsQuery = (clone $query)->where('overall_status', 'LULUS');
+        $hiredApplicationsQuery = (clone $query)->where('applications.overall_status', 'LULUS');
         $totalHired = $hiredApplicationsQuery->count();
 
-        $avgTimeToHire = $hiredApplicationsQuery->selectRaw('AVG(DATEDIFF(hired_date, created_at)) as avg_days')
+        $avgTimeToHire = $hiredApplicationsQuery->selectRaw('AVG(DATEDIFF(applications.updated_at, applications.created_at)) as avg_days')
             ->value('avg_days');
+
+        $finalAvgDays = round($avgTimeToHire ?? 0);
 
         return [
             'total_applications' => $totalApplications,
             'total_hired' => $totalHired,
-            'avg_time_to_hire' => round($avgTimeToHire ?? 0),
+            'avg_time_to_hire' => $finalAvgDays,
             'conversion_rate' => $totalApplications > 0 ? round(($totalHired / $totalApplications) * 100, 1) : 0,
         ];
     }
 
-    private function getRecruitmentFunnelData($query)
-    {
-        $totalApplications = (clone $query)->count();
+    // private function getRecruitmentFunnelData($query)
+    // {
+    //     $totalApplications = (clone $query)->count();
         
-        $stages = [
-            'Psikotes' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'psikotes');})->count(),
-            'Interview HC' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'hc_interview');})->count(),
-            'Interview User' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'user_interview');})->count(),
-            'Offering' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'offering_letter');})->count(),
-            'Hired' => (clone $query)->where('overall_status', 'LULUS')->count(),
-        ];
+    //     $stages = [
+    //         'Psikotes' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'psikotes');})->count(),
+    //         'Interview HC' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'hc_interview');})->count(),
+    //         'Interview User' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'user_interview');})->count(),
+    //         'Offering' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'offering_letter');})->count(),
+    //         'Hired' => (clone $query)->where('overall_status', 'LULUS')->count(),
+    //     ];
 
-        $funnel = [];
-        $previousStageCount = $totalApplications;
+    //     $funnel = [];
+    //     $previousStageCount = $totalApplications;
 
-        foreach ($stages as $stageName => $count) {
-            $conversionRate = $previousStageCount > 0 ? round(($count / $previousStageCount) * 100, 1) : 0;
-            $funnel[] = [
-                'stage' => $stageName,
-                'count' => $count,
-                'conversion' => $conversionRate,
-            ];
-            $previousStageCount = $count;
-        }
+    //     foreach ($stages as $stageName => $count) {
+    //         $conversionRate = $previousStageCount > 0 ? round(($count / $previousStageCount) * 100, 1) : 0;
+    //         $funnel[] = [
+    //             'stage' => $stageName,
+    //             'count' => $count,
+    //             'conversion' => $conversionRate,
+    //         ];
+    //         $previousStageCount = $count;
+    //     }
 
-        return $funnel;
-    }
+    //     return $funnel;
+    // }
 
     private function getSourceEffectivenessData($startDate, $endDate, $source)
     {
@@ -246,8 +278,147 @@ class StatisticsController extends Controller
         return $result;
     }
 
+    // private function getPassRateAnalysisData($baseQuery)
+    // {
+    //     $stages = [
+    //         ['name' => 'Psikotes', 'stage_name' => 'psikotes', 'pass_values' => ['LULUS', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK LULUS', 'FAIL']],
+    //         ['name' => 'Interview HC', 'stage_name' => 'hc_interview', 'pass_values' => ['LULUS', 'DISARANKAN', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DISARANKAN', 'FAIL']],
+    //         ['name' => 'Interview User', 'stage_name' => 'user_interview', 'pass_values' => ['LULUS', 'DISARANKAN', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DISARANKAN', 'FAIL']],
+    //         ['name' => 'Interview BOD', 'stage_name' => 'interview_bod', 'pass_values' => ['LULUS', 'DISARANKAN', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DISARANKAN', 'FAIL']],
+    //         ['name' => 'Offering Letter', 'stage_name' => 'offering_letter', 'pass_values' => ['DITERIMA', 'PASS', 'OK', 'DONE'], 'fail_values' => ['DITOLAK', 'FAIL']],
+    //         ['name' => 'MCU', 'stage_name' => 'mcu', 'pass_values' => ['LULUS', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK LULUS', 'FAIL']],
+    //         ['name' => 'Hired', 'stage_name' => 'hiring', 'pass_values' => ['HIRED', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DIHIRING', 'FAIL']],
+    //     ];
+
+    //     $analysis = [];
+
+    //     foreach ($stages as $stage) {
+    //         $totalReachedQuery = (clone $baseQuery)->whereHas('stages', function($q) use ($stage) {
+    //             $q->where('stage_name', $stage['stage_name']);
+    //         });
+
+    //         $totalReached = $totalReachedQuery->count();
+
+    //         $passed = (clone $totalReachedQuery)->whereHas('stages', function($q) use ($stage) {
+    //             $q->where('stage_name', $stage['stage_name'])->whereIn('status', $stage['pass_values']);
+    //         })->count();
+
+    //         $failed = (clone $totalReachedQuery)->whereHas('stages', function($q) use ($stage) {
+    //             $q->where('stage_name', $stage['stage_name'])->whereIn('status', $stage['fail_values']);
+    //         })->count();
+            
+    //         $totalEvaluated = $passed + $failed;
+    //         $inProgress = $totalReached - $totalEvaluated;
+    //         if ($inProgress < 0) {
+    //             $inProgress = 0;
+    //         }
+
+    //         $pass_rate = 0;
+    //         if ($totalEvaluated > 0) {
+    //             $pass_rate = round(($passed / $totalEvaluated) * 100, 1);
+    //         }
+
+    //         $analysis[] = [
+    //             'name' => $stage['name'],
+    //             'total' => $totalReached,
+    //             'passed' => $passed,
+    //             'failed' => $failed,
+    //             'in_progress' => $inProgress,
+    //             'pass_rate' => $pass_rate,
+    //         ];
+    //     }
+
+    //     return $analysis;
+    // }
+
+    
+    private function getRecruitmentFunnelData($query)
+    {
+        $totalApplications = (clone $query)->count();
+        $filteredApplicationIds = (clone $query)->pluck('applications.id')->toArray();
+
+        // 1. Fetch all stages to determine highest reach
+        $allStages = DB::table('application_stages')
+            ->whereIn('application_id', $filteredApplicationIds)
+            ->select('application_id', 'stage_name')
+            ->get();
+
+        $appHighestWeight = [];
+        foreach ($allStages as $rec) {
+            $appId = $rec->application_id;
+            $sName = strtolower(trim($rec->stage_name));
+            
+            // Map stage weights
+            $weight = match($sName) {
+                'psikotes' => 1,
+                'hc_interview' => 2,
+                'user_interview' => 3,
+                'interview_bod' => 4,
+                'offering_letter' => 5,
+                'mcu' => 6,
+                'hiring' => 7,
+                default => 0,
+            };
+
+            if (!isset($appHighestWeight[$appId]) || $weight > $appHighestWeight[$appId]) {
+                $appHighestWeight[$appId] = $weight;
+            }
+        }
+
+        // 2. Count using logical inference
+        $counts = [
+            'Psikotes' => 0,
+            'Interview HC' => 0,
+            'Interview User' => 0,
+            'Offering' => 0,
+        ];
+
+        foreach ($appHighestWeight as $appId => $hw) {
+            if ($hw >= 1) $counts['Psikotes']++;
+            if ($hw >= 2) $counts['Interview HC']++;
+            if ($hw >= 3) $counts['Interview User']++;
+            if ($hw >= 5) $counts['Offering']++;
+        }
+        
+        $counts['Hired'] = (clone $query)->where('overall_status', 'LULUS')->count();
+
+        // 3. Build funnel array
+        $funnel = [];
+        $previousStageCount = $totalApplications;
+        
+        $stagesToMap = [
+            'Psikotes' => $counts['Psikotes'],
+            'Interview HC' => $counts['Interview HC'],
+            'Interview User' => $counts['Interview User'],
+            'Offering' => $counts['Offering'],
+            'Hired' => $counts['Hired'],
+        ];
+
+        foreach ($stagesToMap as $stageName => $count) {
+            $conversionRate = $previousStageCount > 0 ? round(($count / $previousStageCount) * 100, 1) : 0;
+            $funnel[] = [
+                'stage' => $stageName,
+                'count' => $count,
+                'conversion' => $conversionRate,
+            ];
+            $previousStageCount = $count;
+        }
+
+        return $funnel;
+    }
+
     private function getPassRateAnalysisData($baseQuery)
     {
+        $stageOrder = [
+            'psikotes'        => 1,
+            'hc_interview'    => 2,
+            'user_interview'  => 3,
+            'interview_bod'   => 4,
+            'offering_letter' => 5,
+            'mcu'             => 6,
+            'hiring'          => 7,
+        ];
+
         $stages = [
             ['name' => 'Psikotes', 'stage_name' => 'psikotes', 'pass_values' => ['LULUS', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK LULUS', 'FAIL']],
             ['name' => 'Interview HC', 'stage_name' => 'hc_interview', 'pass_values' => ['LULUS', 'DISARANKAN', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DISARANKAN', 'FAIL']],
@@ -258,29 +429,93 @@ class StatisticsController extends Controller
             ['name' => 'Hired', 'stage_name' => 'hiring', 'pass_values' => ['HIRED', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DIHIRING', 'FAIL']],
         ];
 
-        $analysis = [];
+        $filteredApplicationIds = (clone $baseQuery)->pluck('applications.id')->toArray();
 
-        foreach ($stages as $stage) {
-            $totalReachedQuery = (clone $baseQuery)->whereHas('stages', function($q) use ($stage) {
-                $q->where('stage_name', $stage['stage_name']);
-            });
+        $allStages = DB::table('application_stages')
+            ->join('applications', 'application_stages.application_id', '=', 'applications.id')
+            ->whereIn('application_stages.application_id', $filteredApplicationIds)
+            ->select(
+                'application_stages.application_id',
+                'application_stages.stage_name',
+                'application_stages.status',
+                'applications.overall_status as parent_status'
+            )
+            ->get();
 
-            $totalReached = $totalReachedQuery->count();
+        // 1. Map candidate journeys
+        $appJourneys = [];
+        foreach ($allStages as $rec) {
+            $appId = $rec->application_id;
+            $sName = strtolower(trim($rec->stage_name));
+            $weight = $stageOrder[$sName] ?? 0;
 
-            $passed = (clone $totalReachedQuery)->whereHas('stages', function($q) use ($stage) {
-                $q->where('stage_name', $stage['stage_name'])->whereIn('status', $stage['pass_values']);
-            })->count();
-
-            $failed = (clone $totalReachedQuery)->whereHas('stages', function($q) use ($stage) {
-                $q->where('stage_name', $stage['stage_name'])->whereIn('status', $stage['fail_values']);
-            })->count();
-            
-            $totalEvaluated = $passed + $failed;
-            $inProgress = $totalReached - $totalEvaluated;
-            if ($inProgress < 0) {
-                $inProgress = 0;
+            if (!isset($appJourneys[$appId])) {
+                $appJourneys[$appId] = [
+                    'highest_weight' => 0,
+                    'stages' => [],
+                    'parent_status' => strtoupper(trim($rec->parent_status ?? '')),
+                ];
             }
 
+            if ($weight > $appJourneys[$appId]['highest_weight']) {
+                $appJourneys[$appId]['highest_weight'] = $weight;
+            }
+
+            $appJourneys[$appId]['stages'][$sName] = strtoupper(trim($rec->status));
+        }
+
+        $analysis = [];
+
+        // 2. Perform Logical Inference loop
+        foreach ($stages as $stage) {
+            $targetWeight = $stageOrder[$stage['stage_name']] ?? 0;
+
+            $totalReached = 0;
+            $passed = 0;
+            $failed = 0;
+            $inProgress = 0;
+
+            foreach ($appJourneys as $appId => $journey) {
+                $highestWeight = $journey['highest_weight'];
+                $parentStatus = $journey['parent_status'];
+
+                // OVERRIDE FIX: If the overall application status is 'LULUS' (Hired), 
+                // it implies they successfully completed the entire funnel (Stage 7).
+                if ($parentStatus === 'LULUS') {
+                    $highestWeight = 7;
+                }
+
+                // If candidate ever reached this stage or beyond
+                if ($highestWeight >= $targetWeight && $targetWeight > 0) {
+                    $totalReached++;
+
+                    // INFERENCE: Passed if highest weight is strictly greater than target weight
+                    if ($highestWeight > $targetWeight) {
+                        $passed++;
+                    } else {
+                        // Candidate's current ceiling is this stage, evaluate actual status
+                        $rawStatus = $journey['stages'][$stage['stage_name']] ?? '';
+
+                        if (in_array($parentStatus, ['CANCEL', 'PINDAH'])) {
+                             // Mark as failed in analysis so they aren't calculated as 'progressing'
+                             $failed++;
+                        } else {
+                            // FIX APPLIED HERE: Automatically pass them if overall_status is LULUS
+                            if (in_array($rawStatus, $stage['pass_values']) || $parentStatus === 'LULUS') {
+                                $passed++;
+                            } elseif (in_array($rawStatus, $stage['fail_values']) || in_array($parentStatus, ['DITOLAK', 'FAILED'])) {
+                                $failed++;
+                            } elseif ($rawStatus === 'CANCEL') {
+                                $failed++;
+                            } else {
+                                $inProgress++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            $totalEvaluated = $passed + $failed;
             $pass_rate = 0;
             if ($totalEvaluated > 0) {
                 $pass_rate = round(($passed / $totalEvaluated) * 100, 1);

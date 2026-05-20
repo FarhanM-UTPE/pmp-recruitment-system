@@ -153,7 +153,8 @@
                 </div>
             @endif
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6 sm:mb-8">
-                <a href="{{ route('candidates.index', request()->except(['status', 'type', 'page'])) }}" class="block">
+                <!-- <a href="{{ route('candidates.index', request()->except(['status', 'type', 'page'])) }}" class="block"> -->
+                <!-- <span> -->
                     <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                         <div class="flex items-center justify-between">
                             <div>
@@ -165,8 +166,8 @@
                             </div>
                         </div>
                     </div>
-                </a>
-                <a href="{{ route('candidates.index', array_merge(request()->except('page'), ['status' => 'ON_PROCESS'])) }}" class="block">
+                <!-- </span> -->
+                <!-- <a href="{{ route('candidates.index', array_merge(request()->except('page'), ['status' => 'ON_PROCESS'])) }}" class="block"> -->
                     <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                         <div class="flex items-center justify-between">
                             <div>
@@ -178,8 +179,8 @@
                             </div>
                         </div>
                     </div>
-                </a>
-                <a href="{{ route('candidates.index', array_merge(request()->except('page'), ['status' => 'HIRED'])) }}" class="block">
+                <!-- </a> -->
+                <!-- <a href="{{ route('candidates.index', array_merge(request()->except('page'), ['status' => 'HIRED'])) }}" class="block"> -->
                     <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                         <div class="flex items-center justify-between">
                             <div>
@@ -191,8 +192,8 @@
                             </div>
                         </div>
                     </div>
-                </a>
-                <a href="{{ route('candidates.index', array_merge(request()->except('page'), ['status' => 'FAILED'])) }}" class="block">
+                <!-- </a> -->
+                <!-- <a href="{{ route('candidates.index', array_merge(request()->except('page'), ['status' => 'FAILED'])) }}" class="block"> -->
                     <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                         <div class="flex items-center justify-between">
                             <div>
@@ -204,8 +205,8 @@
                             </div>
                         </div>
                     </div>
-                </a>
-                <a href="{{ route('candidates.index', array_merge(request()->except('page'), ['status' => 'CANCEL'])) }}" class="block">
+                <!-- </a> -->
+                <!-- <a href="{{ route('candidates.index', array_merge(request()->except('page'), ['status' => 'CANCEL'])) }}" class="block"> -->
                     <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                         <div class="flex items-center justify-between">
                             <div>
@@ -217,7 +218,7 @@
                             </div>
                         </div>
                     </div>
-                </a>
+                <!-- </a> -->
             </div>
 
             <div class="mb-6 bg-white rounded-xl p-5 shadow-sm border border-gray-100">
