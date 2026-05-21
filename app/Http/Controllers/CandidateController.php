@@ -430,6 +430,9 @@ class CandidateController extends Controller
             if ($request->type === 'duplicate') {
                 $query->whereIn('applications.candidate_id', $duplicateCandidateIds);
                 $statsQuery->whereIn('applications.candidate_id', $duplicateCandidateIds);
+            } elseif ($request->type === 'non-duplicate'){
+                $query->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
+                $statsQuery->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
             } elseif ($request->type === 'organic') {
                 $query->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'Yes'); });
                 $statsQuery->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'Yes'); });
