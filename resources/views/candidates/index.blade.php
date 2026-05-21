@@ -136,6 +136,7 @@
                             onchange="this.form.submit()">
                         <option value="" {{ !request('type') ? 'selected' : '' }}>Semua Tipe</option>
                         <option value="duplicate" {{ request('type') == 'duplicate' ? 'selected' : '' }}>Duplicate</option>
+                        <option value="non-duplicate" {{ request('type') == 'non-duplicate' ? 'selected' : '' }}>Non-Duplicate</option>
                         <option value="organic" {{ request('type') == 'organic' ? 'selected' : '' }}>Organik</option>
                         <option value="non-organic" {{ request('type') == 'non-organic' ? 'selected' : '' }}>Non-Organik</option>
                     </select>
