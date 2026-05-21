@@ -33,13 +33,56 @@ class DashboardController extends Controller
         }
 
         // Get real statistics based on overall_status
+        // $stats = [
+        //     'total_candidates' => (clone $baseQuery)->count(),
+        //     'candidates_in_process' => (clone $baseQuery)->where('overall_status', 'PROSES')->count(),
+        //     'candidates_passed' => (clone $baseQuery)->where('overall_status', 'LULUS')->count(),
+        //     'candidates_failed' => (clone $baseQuery)->where('overall_status', 'DITOLAK')->count(),
+        //     'candidates_cancelled' => (clone $baseQuery)->where('overall_status', 'CANCEL')->count(),
+        // ];
+        $filteredApplicationIds = (clone $baseQuery)->pluck('applications.id')->toArray();
+
         $stats = [
-            'total_candidates' => (clone $baseQuery)->count(),
-            'candidates_in_process' => (clone $baseQuery)->where('overall_status', 'PROSES')->count(),
-            'candidates_passed' => (clone $baseQuery)->where('overall_status', 'LULUS')->count(),
-            'candidates_failed' => (clone $baseQuery)->where('overall_status', 'DITOLAK')->count(),
-            'candidates_cancelled' => (clone $baseQuery)->where('overall_status', 'CANCEL')->count(),
+            'total_candidates'      => 0,
+            'candidates_in_process' => 0,
+            'candidates_passed'     => 0,
+            'candidates_failed'     => 0,
+            'candidates_cancelled'  => 0,
         ];
+
+        if (!empty($filteredApplicationIds)) {
+            $latestApplicationStages = DB::table('application_stages')
+                ->join('applications', 'application_stages.application_id', '=', 'applications.id')
+                ->whereIn('application_stages.application_id', $filteredApplicationIds)
+                ->whereIn('application_stages.id', function($subQuery) {
+                    $subQuery->select(DB::raw('MAX(id)'))
+                        ->from('application_stages')
+                        ->groupBy('application_id');
+                })
+                ->select('application_stages.status', 'applications.overall_status as parent_status')
+                ->get();
+            
+            $stats['total_candidates'] = count($latestApplicationStages);
+            
+            foreach($latestApplicationStages as $rec) {
+                $rawStatus = strtoupper(trim($rec->status));
+                $parentStatus = strtoupper(trim($rec->parent_status ?? ''));
+                
+                if (in_array($parentStatus, ['CANCEL', 'PINDAH'])) {
+                    $stats['candidates_cancelled']++;
+                } else {
+                    if (in_array($rawStatus, ['LULUS', 'HIRED'])) {
+                        $stats['candidates_passed']++;
+                    } elseif (in_array($rawStatus, ['TIDAK LULUS', 'DITOLAK', 'FAILED'])) {
+                        $stats['candidates_failed']++;
+                    } elseif ($rawStatus === 'CANCEL') {
+                        $stats['candidates_cancelled']++;
+                    } else {
+                        $stats['candidates_in_process']++;
+                    }
+                }
+            }
+        }
 
         $applications = (clone $baseQuery)->with(['stages' => function($query) {
             $query->orderBy('scheduled_date', 'desc')->orderBy('id', 'desc');

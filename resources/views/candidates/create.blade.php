@@ -95,7 +95,7 @@
                             </select>
                         </div>
 
-                        <div x-show="selectedVacancy && selectedVacancy.mpp_submissions && selectedVacancy.mpp_submissions.length > 1">
+                        <div x-show="selectedVacancy && selectedVacancy.mpp_submissions && selectedVacancy.mpp_submissions.length > 0">
                             <label for="mpp_year" class="block text-sm font-medium text-gray-700">Tahun MPP *</label>
                             <select name="mpp_year" id="mpp_year" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
                                 <option value="">Pilih Tahun</option>

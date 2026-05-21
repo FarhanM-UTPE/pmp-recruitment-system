@@ -131,11 +131,34 @@ class CandidateController extends Controller
     /**
      * Show the form for creating a new candidate
      */
+    // public function create()
+    // {
+    //     $vacancies = Vacancy::whereHas('mppSubmissions', function ($q) {
+    //         $q->where('proposal_status', 'approved');
+    //     })->orderBy('name')->get();
+    //     $departments = Department::orderBy('name')->get();
+        
+    //     $today = now()->format('ymd');
+    //     $todayCount = Candidate::whereDate('created_at', today())->count();
+    //     $nextId = str_pad($todayCount + 1, 3, '0', STR_PAD_LEFT);
+    //     $applicantId = "{$today}-{$nextId}";
+
+    //     return view('candidates.create', compact('vacancies', 'departments', 'applicantId'));
+    // }
+
     public function create()
     {
+        // Eager load 'mppSubmissions' alongside the 'whereHas' filter
         $vacancies = Vacancy::whereHas('mppSubmissions', function ($q) {
             $q->where('proposal_status', 'approved');
-        })->orderBy('name')->get();
+        })
+        ->with(['mppSubmissions' => function ($q) {
+            // Ensure we only load the approved ones into the JSON array
+            $q->where('proposal_status', 'approved');
+        }])
+        ->orderBy('name')
+        ->get();
+        
         $departments = Department::orderBy('name')->get();
         
         $today = now()->format('ymd');
@@ -455,8 +478,6 @@ class CandidateController extends Controller
             $query->where('candidates.source', $request->source);
             $statsQuery->where('candidates.source', $request->source);
         }
-
-
 
         // if ($request->filled('status')) {
         //     $status = strtoupper($request->status);
