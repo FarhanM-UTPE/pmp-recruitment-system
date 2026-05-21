@@ -9,26 +9,53 @@
                 <h1 class="text-3xl font-bold text-gray-900">Detail Pengajuan MPP</h1>
                 <p class="mt-2 text-gray-600">{{ $mppSubmission->department->name }}</p>
             </div>
-            <button onclick="history.back()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 cursor-pointer border-none">
+            <a href="{{ url('/mpp-submissions') }}" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 cursor-pointer border-none inline-block no-underline">
                 ← Kembali
-            </button>
+            </a>
         </div>
 
-        <!-- Success/Error Messages -->
-        @if ($message = Session::get('success'))
-        <div class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
-            {{ $message }}
-        </div>
-        @endif
+        <!-- Floating Toast Notifications -->
+        <div id="toast-container" class="fixed z-50 flex flex-col gap-3 items-end" style="position: fixed; bottom: 24px; right: 24px; z-index: 9999;">
+            @if ($message = Session::get('success'))
+            <div class="toast-notification bg-white border-l-4 border-green-500 shadow-xl rounded-md p-4 w-80 transform transition-all duration-500 ease-out translate-x-full opacity-0">
+                <div class="flex justify-between items-start gap-4">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-check-circle text-green-500 text-lg"></i>
+                        <p class="text-sm font-medium text-gray-800">{{ $message }}</p>
+                    </div>
+                    <button onclick="this.closest('.toast-notification').remove()" class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <!-- Loading Indicator -->
+                <div class="w-full bg-gray-200 h-1 mt-3 rounded-full overflow-hidden">
+                    <div class="toast-progress bg-green-500 h-full" style="width: 100%; transition: width 3s linear;"></div>
+                </div>
+            </div>
+            @endif
 
-        @if ($message = Session::get('error'))
-        <div class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-            {{ $message }}
+            @if ($message = Session::get('error'))
+            <div class="toast-notification bg-white border-l-4 border-red-500 shadow-xl rounded-md p-4 w-80 transform transition-all duration-500 ease-out translate-x-full opacity-0">
+                <div class="flex justify-between items-start gap-4">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-exclamation-circle text-red-500 text-lg"></i>
+                        <p class="text-sm font-medium text-gray-800">{{ $message }}</p>
+                    </div>
+                    <button onclick="this.closest('.toast-notification').remove()" class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <!-- Loading Indicator -->
+                <div class="w-full bg-gray-200 h-1 mt-3 rounded-full overflow-hidden">
+                    <div class="toast-progress bg-red-500 h-full" style="width: 100%; transition: width 3s linear;"></div>
+                </div>
+            </div>
+            @endif
         </div>
-        @endif
 
-        <div class="space-y-6">
-            <!-- MPP Info Card -->
+        <!-- Added ID here for DOM Replacement -->
+        <div id="main-content-wrapper" style="display:contents;">
+            <div class="space-y-6">
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-xl font-bold text-gray-900 mb-4">Informasi Pengajuan</h2>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -71,7 +98,7 @@
                                         <span class="px-2 py-1 rounded text-xs font-medium
                                             @if($vacancy->pivot->vacancy_status === 'OSPKWT') bg-blue-100 text-blue-800
                                             @elseif($vacancy->pivot->vacancy_status === 'OS') bg-purple-100 text-purple-800 @endif
-                                        ">
+                                            ">
                                             {{ $vacancy->pivot->vacancy_status }}
                                         </span>
                                     </div>
@@ -98,7 +125,7 @@
                                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">✓ {{ $document->status }}</span>
                                                 <a href="{{ route('vacancy-documents.preview', [$vacancy, $document]) }}" class="text-blue-600 hover:text-blue-900 text-xs font-medium" target="_blank">[Preview]</a>
                                                 @if (($isDepartmentUser && auth()->user()->department_id === $vacancy->department_id && $document->status === 'pending') || $isTeamHC)
-                                                <form action="{{ route('vacancy-documents.destroy', [$vacancy, $document]) }}" method="POST" class="inline">
+                                                <form action="{{ route('vacancy-documents.destroy', [$vacancy, $document]) }}" method="POST" class="inline action-form">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" class="text-red-600 hover:text-red-900 text-xs font-medium" onclick="return confirm('Yakin ingin menghapus dokumen ini?')">[Hapus]</button>
@@ -120,26 +147,26 @@
                                     @can('approve-mpp-submission')
                                         @if(auth()->user()->hasRole('team_hc') && $vacancy->pivot->proposal_status === 'pending')
                                         <div class="flex gap-2 pt-2 border-t border-gray-200">
-                                            <form action="{{ route('mpp-submissions.approve-vacancy', [$mppSubmission, $vacancy]) }}" method="POST">
+                                            <form action="{{ route('mpp-submissions.approve-vacancy', [$mppSubmission, $vacancy]) }}" method="POST" class="w-full action-form">
                                                 @csrf
-                                                <button type="submit" class="w-full px-3 py-1.5 bg-green-600 text-white rounded-md text-sm hover:bg-green-700">Approve (HC1)</button>
+                                                <button type="submit" class="w-full px-3 py-1.5 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors">Approve (HC1)</button>
                                             </form>
-                                            <form action="{{ route('mpp-submissions.reject-vacancy', [$mppSubmission, $vacancy]) }}" method="POST" onsubmit="return handleReject(event, this)">
+                                            <form action="{{ route('mpp-submissions.reject-vacancy', [$mppSubmission, $vacancy]) }}" method="POST" class="w-full action-form">
                                                 @csrf
                                                 <input type="hidden" name="rejection_reason" class="rejection-reason-input">
-                                                <button type="submit" class="w-full px-3 py-1.5 bg-red-600 text-white rounded-md text-sm hover:bg-red-700">Reject</button>
+                                                <button type="submit" class="w-full px-3 py-1.5 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 transition-colors">Reject</button>
                                             </form>
                                         </div>
                                         @elseif(auth()->user()->hasRole('team_hc_2') && $vacancy->pivot->proposal_status === 'pending_hc2_approval')
                                         <div class="flex gap-2 pt-2 border-t border-gray-200">
-                                            <form action="{{ route('mpp-submissions.approve-vacancy', [$mppSubmission, $vacancy]) }}" method="POST">
+                                            <form action="{{ route('mpp-submissions.approve-vacancy', [$mppSubmission, $vacancy]) }}" method="POST" class="w-full action-form">
                                                 @csrf
-                                                <button type="submit" class="w-full px-3 py-1.5 bg-green-600 text-white rounded-md text-sm hover:bg-green-700">Approve (HC2)</button>
+                                                <button type="submit" class="w-full px-3 py-1.5 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors">Approve (HC2)</button>
                                             </form>
-                                            <form action="{{ route('mpp-submissions.reject-vacancy', [$mppSubmission, $vacancy]) }}" method="POST" onsubmit="return handleReject(event, this)">
+                                            <form action="{{ route('mpp-submissions.reject-vacancy', [$mppSubmission, $vacancy]) }}" method="POST" class="w-full action-form">
                                                 @csrf
                                                 <input type="hidden" name="rejection_reason" class="rejection-reason-input">
-                                                <button type="submit" class="w-full px-3 py-1.5 bg-red-600 text-white rounded-md text-sm hover:bg-red-700">Reject</button>
+                                                <button type="submit" class="w-full px-3 py-1.5 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 transition-colors">Reject</button>
                                             </form>
                                         </div>
                                         @endif
@@ -184,19 +211,80 @@
                 </div>
             </div>
             @endif
+            </div>
         </div>
+
     </div>
 </div>
 
 <script>
-function handleReject(event, form) {
-    event.preventDefault();
-    const reason = prompt("Masukkan alasan penolakan:");
-    if (reason && reason.trim() !== "") {
-        form.querySelector('.rejection-reason-input').value = reason;
-        form.submit();
-    }
-    return false;
+function initToasts() {
+    const toasts = document.querySelectorAll('.toast-notification');
+    toasts.forEach(toast => {
+        const progressBar = toast.querySelector('.toast-progress');
+        
+        requestAnimationFrame(() => {
+            toast.classList.remove('translate-x-full', 'opacity-0');
+            toast.classList.add('translate-x-0', 'opacity-100');
+        });
+        
+        if (progressBar) {
+            setTimeout(() => {
+                progressBar.style.width = '0%';
+            }, 300); 
+        }
+
+        setTimeout(() => {
+            toast.classList.remove('translate-x-0', 'opacity-100');
+            toast.classList.add('translate-x-full', 'opacity-0');
+            setTimeout(() => toast.remove(), 500);
+        }, 3300);
+    });
 }
+
+document.addEventListener("DOMContentLoaded", function() {
+    initToasts();
+
+    document.addEventListener('submit', async function(e) {
+        if (!e.target.classList.contains('action-form')) return;
+        
+        e.preventDefault();
+        const form = e.target;
+        
+        if (form.action.includes('reject')) {
+            const reason = prompt("Masukkan alasan penolakan:");
+            if (!reason || reason.trim() === "") return; 
+            form.querySelector('.rejection-reason-input').value = reason;
+        }
+
+        try {
+            const methodInput = form.querySelector('input[name="_method"]');
+            const fetchMethod = methodInput ? methodInput.value : 'POST';
+
+            const response = await fetch(form.action, {
+                method: fetchMethod,
+                body: new FormData(form),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
+            if (response.ok) {
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                document.getElementById('main-content-wrapper').innerHTML = doc.getElementById('main-content-wrapper').innerHTML;
+                
+                document.getElementById('toast-container').innerHTML = doc.getElementById('toast-container').innerHTML;
+                
+                initToasts();
+            } else {
+                form.submit(); 
+            }
+        } catch (error) {
+            console.error('Error submitting form:', error);
+            form.submit();
+        }
+    });
+});
 </script>
 @endsection
