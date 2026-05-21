@@ -235,20 +235,30 @@
                     </a>
                     @endif
                 </div>
-                <div class="flex flex-wrap gap-3">
-                    @forelse($activeVacancies as $vacancy)
-                        @php
-                            $mppSubmission = $vacancy->mppSubmissions->first();
-                            $neededCount = $mppSubmission ? $mppSubmission->pivot->needed_count : 0;
-                            $isActive = request('vacancy_id') == $vacancy->id;
-                        @endphp
-                        <a href="{{ route('candidates.index', array_merge(request()->except('page'), ['vacancy_id' => $vacancy->id])) }}" 
-                           class="flex items-center text-sm font-medium px-4 py-2 rounded-full transition-all {{ $isActive ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-800 hover:bg-gray-200' }}">
-                            <span>{{ $vacancy->name }}</span>
-                        </a>
-                    @empty
-                        <p class="text-sm text-gray-500">Tidak ada lowongan yang aktif saat ini.</p>
-                    @endforelse
+                
+                <div class="w-full">
+                    <select 
+                        onchange="if(this.value) window.location.href=this.value" 
+                        class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 transition-colors"
+                    >
+                        <option value="{{ route('candidates.index', request()->except(['vacancy_id', 'page'])) }}">
+                            Semua Lowongan
+                        </option>
+                        
+                        @forelse($activeVacancies->sortBy('name') as $vacancy)
+                            @php
+                                $mppSubmission = $vacancy->mppSubmissions->first();
+                                $neededCount = $mppSubmission ? $mppSubmission->pivot->needed_count : 0;
+                                $isActive = request('vacancy_id') == $vacancy->id;
+                                $url = route('candidates.index', array_merge(request()->except('page'), ['vacancy_id' => $vacancy->id]));
+                            @endphp
+                            <option value="{{ $url }}" {{ $isActive ? 'selected' : '' }}>
+                                {{ $vacancy->name }}
+                            </option>
+                        @empty
+                            <option value="" disabled>Tidak ada lowongan yang aktif saat ini.</option>
+                        @endforelse
+                    </select>
                 </div>
             </div>
 

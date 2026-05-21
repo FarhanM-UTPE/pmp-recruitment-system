@@ -156,11 +156,15 @@
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-500">Tidak Lulus</span>
-                                    <span class="font-medium text-red-600">{{ number_format($stage['failed']) }}</span>
+                                    <span class="font-medium text-red-600">{{ number_format($stage['failed']) }}  <span class="text-xs text-gray-400 font-normal">({{ $stage['tidak_lulus_pass_rate'] }}%)</span></span>
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-500">Dalam Proses</span>
-                                    <span class="font-medium text-blue-600">{{ number_format($stage['in_progress']) }}</span>
+                                    <span class="font-medium text-blue-600">{{ number_format($stage['in_progress']) }}  <span class="text-xs text-gray-400 font-normal">({{ $stage['dalam_proses_pass_rate'] }}%)</span></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-500">Canceled</span>
+                                    <span class="font-medium text-black-600">{{ number_format($stage['canceled']) }}  <span class="text-xs text-gray-400 font-normal">({{ $stage['canceled_pass_rate'] }}%)</span></span>
                                 </div>
                             @else
                                 <div class="text-sm text-gray-500 italic pt-2">Semua dianggap 'Dalam Proses'.</div>

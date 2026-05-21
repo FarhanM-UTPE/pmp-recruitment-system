@@ -474,6 +474,7 @@ class StatisticsController extends Controller
             $passed = 0;
             $failed = 0;
             $inProgress = 0;
+            $canceled = 0;
 
             foreach ($appJourneys as $appId => $journey) {
                 $highestWeight = $journey['highest_weight'];
@@ -498,7 +499,7 @@ class StatisticsController extends Controller
 
                         if (in_array($parentStatus, ['CANCEL', 'PINDAH'])) {
                              // Mark as failed in analysis so they aren't calculated as 'progressing'
-                             $failed++;
+                             $canceled++;
                         } else {
                             // FIX APPLIED HERE: Automatically pass them if overall_status is LULUS
                             if (in_array($rawStatus, $stage['pass_values']) || $parentStatus === 'LULUS') {
@@ -516,18 +517,25 @@ class StatisticsController extends Controller
             }
 
             $totalEvaluated = $passed + $failed;
-            $pass_rate = 0;
-            if ($totalEvaluated > 0) {
-                $pass_rate = round(($passed / $totalEvaluated) * 100, 1);
-            }
-
+            // $pass_rate = 0;
+            // if ($totalEvaluated > 0) {
+            //     $pass_rate = round(($passed / $totalEvaluated) * 100, 1);
+            // }
+            $pass_rate = round(($passed / $totalReached) * 100, 1);
+            $tidak_lulus_pass_rate = round(($failed / $totalReached) *100, 1);
+            $dalam_proses_pass_rate = round(($inProgress / $totalReached) *100, 1);
+            $canceled_pass_rate = round(($canceled / $totalReached) *100, 1);
             $analysis[] = [
                 'name' => $stage['name'],
                 'total' => $totalReached,
                 'passed' => $passed,
                 'failed' => $failed,
+                'canceled' => $canceled,
                 'in_progress' => $inProgress,
                 'pass_rate' => $pass_rate,
+                'tidak_lulus_pass_rate' => $tidak_lulus_pass_rate,
+                'dalam_proses_pass_rate' => $dalam_proses_pass_rate,
+                'canceled_pass_rate' => $canceled_pass_rate
             ];
         }
 

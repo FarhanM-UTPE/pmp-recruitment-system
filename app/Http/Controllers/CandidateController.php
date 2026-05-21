@@ -576,17 +576,35 @@ class CandidateController extends Controller
 
         } else {
             // GLOBAL STATUS FILTER (Jika tidak ada filter stage / Semua Tahapan)
+            // if ($request->filled('status')) {
+            //     $status = strtoupper($request->status);
+            //     $overallStatus = match ($status) {
+            //         'FAILED' => 'DITOLAK',
+            //         'HIRED' => 'LULUS',
+            //         'ON_PROCESS' => 'PROSES',
+            //         'CANCEL' => 'CANCEL',
+            //         default => $status
+            //     };
+            //     $query->where('applications.overall_status', $overallStatus);
+            //     $statsQuery->where('applications.overall_status', $overallStatus);
+            // }
             if ($request->filled('status')) {
                 $status = strtoupper($request->status);
-                $overallStatus = match ($status) {
-                    'FAILED' => 'DITOLAK',
-                    'HIRED' => 'LULUS',
-                    'ON_PROCESS' => 'PROSES',
-                    'CANCEL' => 'CANCEL',
-                    default => $status
-                };
-                $query->where('applications.overall_status', $overallStatus);
-                $statsQuery->where('applications.overall_status', $overallStatus);
+                
+                if ($status === 'CANCEL') {
+                    // Fetch both CANCEL and PINDAH statuses
+                    $query->whereIn('applications.overall_status', ['CANCEL', 'PINDAH']);
+                    $statsQuery->whereIn('applications.overall_status', ['CANCEL', 'PINDAH']);
+                } else {
+                    $overallStatus = match ($status) {
+                        'FAILED' => 'DITOLAK',
+                        'HIRED' => 'LULUS',
+                        'ON_PROCESS' => 'PROSES',
+                        default => $status
+                    };
+                    $query->where('applications.overall_status', $overallStatus);
+                    $statsQuery->where('applications.overall_status', $overallStatus);
+                }
             }
         }
 
