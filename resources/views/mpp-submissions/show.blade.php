@@ -258,8 +258,16 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         try {
-            const methodInput = form.querySelector('input[name="_method"]');
-            const fetchMethod = methodInput ? methodInput.value : 'POST';
+            // const methodInput = form.querySelector('input[name="_method"]');
+            // const fetchMethod = methodInput ? methodInput.value : 'POST';
+
+            // const response = await fetch(form.action, {
+            //     method: fetchMethod,
+            //     body: new FormData(form),
+            //     headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            // });
+
+            const fetchMethod = form.method || 'POST';
 
             const response = await fetch(form.action, {
                 method: fetchMethod,
