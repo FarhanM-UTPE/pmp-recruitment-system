@@ -98,24 +98,27 @@ class CalendarController extends Controller
 
     private function extractZoomLink(?string $description): ?string
     {
-        if (!$description) return null;
+        if (!$description)
+            return null;
         preg_match('/(https://[a-zA-Z0-9.-]+\.zoom\.us/j/[a-zA-Z0-9?=_.-]+)/', $description, $matches);
         return $matches[0] ?? null;
     }
 
     private function extractMeetingId(?string $url): ?string
     {
-        if (!$url) return null;
+        if (!$url)
+            return null;
         preg_match('/j\/(\d+)/i', $url, $matches);
         return $matches[1] ?? null;
     }
 
     private function extractCandidateId(?string $text): ?int
     {
-        if (!$text) return null;
+        if (!$text)
+            return null;
         // Example: Looks for [CANDIDATE-123] in event title or description
         if (preg_match('/\[CANDIDATE-(\d+)\]/i', $text, $matches)) {
-            return (int)$matches[1];
+            return (int) $matches[1];
         }
         return null;
     }

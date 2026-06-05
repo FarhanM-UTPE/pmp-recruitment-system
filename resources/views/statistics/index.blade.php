@@ -50,7 +50,7 @@
             <p class="text-3xl font-bold text-gray-900 mt-1">{{ number_format($kpiData['avg_time_to_hire']) }}</p>
         </div>
         <div class="bg-white rounded-xl p-6 border border-gray-200">
-            <p class="text-sm font-medium text-gray-500">Tingkat Konversi Global</p>
+            <p class="text-sm font-medium text-gray-500">Acceptance Ratio</p>
             <p class="text-3xl font-bold text-green-600 mt-1">{{ $kpiData['conversion_rate'] }}%</p>
         </div>
     </div>
@@ -72,7 +72,7 @@
         <div class="bg-white rounded-xl p-6 border border-gray-200">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Tren Aplikasi Bulanan</h3>
             <div style="height: 300px;"><canvas id="monthlyChart"></canvas></div>
-        </div>
+        </div>  
     </div>
 
     <!-- Charts Row 3: Gender and University -->
@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 datasets: [
                     {
                         label: 'Paling Cepat (Hari)',
-                        data: timelineAnalysisData.map(d => d.min_days),
+                        data: timelineAnalysisData.map(d => Math.round(d.min_days)),
                         borderColor: 'rgba(34, 197, 94, 1)',
                         backgroundColor: 'rgba(34, 197, 94, 0.1)',
                         tension: 0.3,
@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     },
                     {
                         label: 'Paling Lama (Hari)',
-                        data: timelineAnalysisData.map(d => d.max_days),
+                        data: timelineAnalysisData.map(d => Math.round(d.max_days)),
                         borderColor: 'rgba(239, 68, 68, 1)',
                         backgroundColor: 'rgba(239, 68, 68, 0.1)',
                         tension: 0.3,
@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
                         borderDash: [5, 5],
                         tension: 0.3,
-                        pointRadius: 0,
+                        pointRadius: 4,
                     }
                 ]
             },

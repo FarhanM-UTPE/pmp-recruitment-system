@@ -14,12 +14,12 @@ use App\Models\Department;
 
 class AccountController extends Controller
 {
-    
+
 
     public function index()
     {
         $users = User::with('roles')->orderBy('created_at', 'desc')->paginate(10);
-        
+
         $stats = [
             'total' => User::count(),
             'admin' => User::role('admin')->count(),
@@ -28,7 +28,7 @@ class AccountController extends Controller
             'kepala departemen' => User::role('kepala departemen')->count(),
             'active' => User::where('status', true)->count(),
         ];
-        
+
         return view('accounts.index', compact('users', 'stats'));
     }
 
@@ -73,7 +73,7 @@ class AccountController extends Controller
         $user->assignRole($request->role);
 
         return redirect()->route('accounts.index')
-                        ->with('success', 'Akun berhasil dibuat.');
+            ->with('success', 'Akun berhasil dibuat.');
     }
 
     public function edit(User $account)
@@ -81,7 +81,7 @@ class AccountController extends Controller
         $roles = Role::where('name', '!=', 'admin')->get();
         $departments = Department::all();
         $account->load('roles');
-        
+
         return view('accounts.edit', [
             'account' => $account,
             'departments' => $departments,
@@ -123,7 +123,7 @@ class AccountController extends Controller
         $account->syncRoles([$request->role]);
 
         return redirect()->route('accounts.index')
-                        ->with('success', 'Akun berhasil diperbarui.');
+            ->with('success', 'Akun berhasil diperbarui.');
     }
 
     public function destroy(User $account)
@@ -131,19 +131,19 @@ class AccountController extends Controller
         // Prevent deleting the last admin
         if ($account->hasRole('admin') && User::role('admin')->count() <= 1) {
             return redirect()->route('accounts.index')
-                            ->with('error', 'Tidak dapat menghapus admin terakhir.');
+                ->with('error', 'Tidak dapat menghapus admin terakhir.');
         }
 
         // Prevent self-deletion
         if ($account->id === Auth::user()->id) {
             return redirect()->route('accounts.index')
-                            ->with('error', 'Tidak dapat menghapus akun sendiri.');
+                ->with('error', 'Tidak dapat menghapus akun sendiri.');
         }
 
         $account->delete();
 
         return redirect()->route('accounts.index')
-                        ->with('success', 'Akun berhasil dihapus.');
+            ->with('success', 'Akun berhasil dihapus.');
     }
 
     public function export()

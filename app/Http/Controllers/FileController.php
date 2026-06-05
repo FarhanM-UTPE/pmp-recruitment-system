@@ -24,8 +24,8 @@ class FileController extends Controller
 
         // Find the candidate by the file path in either cv or flk column
         $candidate = Candidate::where('cv', $filePath)
-                              ->orWhere('flk', $filePath)
-                              ->first();
+            ->orWhere('flk', $filePath)
+            ->first();
 
         if (!$candidate) {
             Log::warning('File access attempt failed: No candidate found for file path.', ['file_path' => $filePath]);

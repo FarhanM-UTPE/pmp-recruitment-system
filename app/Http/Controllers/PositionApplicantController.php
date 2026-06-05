@@ -15,11 +15,14 @@ class PositionApplicantController extends Controller
     {
         $selectedYear = $request->input('year', date('Y'));
 
-        $query = MPPSubmission::with(['department', 'vacancies' => function ($query) {
-            // Eager load only approved vacancies
-            $query->where('mpp_submission_vacancy.proposal_status', 'approved');
-        }])
-        ->whereIn('status', [MPPSubmission::STATUS_SUBMITTED, MPPSubmission::STATUS_APPROVED]);
+        $query = MPPSubmission::with([
+            'department',
+            'vacancies' => function ($query) {
+                // Eager load only approved vacancies
+                $query->where('mpp_submission_vacancy.proposal_status', 'approved');
+            }
+        ])
+            ->whereIn('status', [MPPSubmission::STATUS_SUBMITTED, MPPSubmission::STATUS_APPROVED]);
 
         if ($selectedYear) {
             $query->where('year', $selectedYear);
@@ -33,9 +36,8 @@ class PositionApplicantController extends Controller
                 return $submission->vacancies->map(function ($vacancy) use ($submission) {
                     $applicantCount = $vacancy->applications()
                         ->where('mpp_year', $submission->year)
-                        ->whereNotIn('overall_status', ['LULUS', 'HIRED', 'DITERIMA', 'DITOLAK', 'CANCEL'])
                         ->count();
-                    
+
                     $acceptedCount = $vacancy->applications()
                         ->where('mpp_year', $submission->year)
                         ->whereIn('overall_status', ['HIRED', 'DITERIMA'])
@@ -64,7 +66,7 @@ class PositionApplicantController extends Controller
             })->groupBy('name');
         });
 
-        $years = MPPSubmission::select('year')->distinct()->orderBy('year', 'desc')->pluck('year');
+        $years = \App\Services\YearProvider::availableYears();
 
         return view('posisi-pelamar.index', [
             'departments' => $data,

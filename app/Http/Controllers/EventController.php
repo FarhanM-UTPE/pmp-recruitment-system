@@ -59,7 +59,7 @@ class EventController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error creating event: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan saat menyimpan event. Silakan coba lagi.'
@@ -79,7 +79,7 @@ class EventController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Error showing event: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Event tidak ditemukan.'
@@ -132,7 +132,7 @@ class EventController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error updating event: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan saat memperbarui event.'
@@ -155,7 +155,7 @@ class EventController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error deleting event: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan saat menghapus event.'
@@ -204,7 +204,7 @@ class EventController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error fetching events by date range: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan saat mengambil data event.'
@@ -219,7 +219,7 @@ class EventController extends Controller
     {
         try {
             $today = now()->toDateString();
-            
+
             $events = Event::with('creator')
                 ->whereDate('date', $today)
                 ->orderBy('time', 'asc')
@@ -233,7 +233,7 @@ class EventController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error fetching today events: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan saat mengambil data event hari ini.'
@@ -249,7 +249,7 @@ class EventController extends Controller
         try {
             $today = now()->toDateString();
             $nextWeek = now()->addDays(7)->toDateString();
-            
+
             $events = Event::with('creator')
                 ->whereBetween('date', [$today, $nextWeek])
                 ->orderBy('date', 'asc')
@@ -264,7 +264,7 @@ class EventController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error fetching upcoming events: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan saat mengambil data event mendatang.'
@@ -279,7 +279,7 @@ class EventController extends Controller
     {
         $user = Auth::user();
         Log::info('Getting calendar events for user', ['user_id' => $user->id, 'role' => $user->roles->pluck('name')]);
-    
+
         // 1. Get custom events from events table
         $customEvents = Event::all()->map(function ($event) {
             return [
@@ -295,26 +295,26 @@ class EventController extends Controller
                 'created_by' => $event->creator->name ?? 'Unknown'
             ];
         });
-    
+
         // 2. Get candidate test events from next_test_date
         $candidateTestEvents = collect();
-        
+
         // Base query for candidates with upcoming tests
         $candidatesQuery = Candidate::with(['department'])
             ->whereNotNull('next_test_date')
             ->whereNotNull('next_test_stage')
             ->where('next_test_date', '>=', now()->toDateString())
             ->whereIn('overall_status', ['PROSES', 'DALAM PROSES', 'PENDING']);
-    
+
         // Apply department filter for department role users
         if ($user->hasRole('department') && !empty($user->department_id)) {
             $candidatesQuery->where('department_id', $user->department_id);
         }
-    
+
         $candidatesWithTests = $candidatesQuery->get();
-        
+
         Log::info('Found candidates with tests', ['count' => $candidatesWithTests->count()]);
-    
+
         // Stage display mapping
         $stageDisplayMap = [
             'cv_review' => 'CV Review',
@@ -326,19 +326,19 @@ class EventController extends Controller
             'mcu' => 'Medical Check Up',
             'hiring' => 'Hiring'
         ];
-    
+
         foreach ($candidatesWithTests as $candidate) {
             $testDate = Carbon::parse($candidate->next_test_date)->format('Y-m-d');
-            $stageName = $stageDisplayMap[$candidate->next_test_stage] ?? 
-                        Str::title(str_replace('_', ' ', $candidate->next_test_stage));
-    
+            $stageName = $stageDisplayMap[$candidate->next_test_stage] ??
+                Str::title(str_replace('_', ' ', $candidate->next_test_stage));
+
             $candidateTestEvents->push([
                 'id' => 'candidate_test_' . $candidate->id,
                 'title' => $candidate->nama . ' - ' . $stageName,
                 'date' => $testDate,
                 'time' => null, // Could be extracted if you have time info
-                'description' => "Tes {$stageName} untuk {$candidate->vacancy}" . 
-                               ($candidate->department ? " - {$candidate->department->name}" : ''),
+                'description' => "Tes {$stageName} untuk {$candidate->vacancy}" .
+                    ($candidate->department ? " - {$candidate->department->name}" : ''),
                 'location' => null,
                 'is_custom' => false,
                 'url' => route('candidates.show', $candidate->id),
@@ -351,7 +351,7 @@ class EventController extends Controller
 
         // 3. BONUS: Get timeline events from actual stage dates (optional enhancement)
         $timelineEvents = collect();
-        
+
         // Get recent stage completions (last 30 days) to show in calendar as reference
         $recentCandidates = Candidate::with(['department'])
             ->where('updated_at', '>=', now()->subDays(30))
@@ -362,7 +362,7 @@ class EventController extends Controller
             // Check each stage completion date
             $stages = [
                 'cv_review_date' => 'CV Review',
-                'psikotes_date' => 'Psikotes', 
+                'psikotes_date' => 'Psikotes',
                 'hc_interview_date' => 'HC Interview',
                 'user_interview_date' => 'User Interview',
                 'bodgm_interview_date' => 'Interview BOD/GM',
@@ -372,18 +372,20 @@ class EventController extends Controller
             ];
 
             foreach ($stages as $dateField => $stageName) {
-                if ($candidate->$dateField && 
-                    Carbon::parse($candidate->$dateField)->gte(now()->subDays(30))) {
-                    
+                if (
+                    $candidate->$dateField &&
+                    Carbon::parse($candidate->$dateField)->gte(now()->subDays(30))
+                ) {
+
                     $eventDate = Carbon::parse($candidate->$dateField)->format('Y-m-d');
-                    
+
                     $timelineEvents->push([
                         'id' => 'timeline_' . $candidate->id . '_' . str_replace('_date', '', $dateField),
                         'title' => "✓ {$candidate->nama} - {$stageName}",
                         'date' => $eventDate,
                         'time' => Carbon::parse($candidate->$dateField)->format('H:i'),
                         'description' => "Tahapan {$stageName} selesai untuk {$candidate->vacancy}" .
-                                       ($candidate->department ? " - {$candidate->department->name}" : ''),
+                            ($candidate->department ? " - {$candidate->department->name}" : ''),
                         'location' => null,
                         'is_custom' => false,
                         'url' => route('candidates.show', $candidate->id),
@@ -395,17 +397,17 @@ class EventController extends Controller
                 }
             }
         }
-        
+
         // Merge all events
         $allEvents = $customEvents->merge($candidateTestEvents)->merge($timelineEvents);
-        
+
         Log::info('Calendar events summary', [
             'custom_events' => $customEvents->count(),
-            'candidate_tests' => $candidateTestEvents->count(), 
+            'candidate_tests' => $candidateTestEvents->count(),
             'timeline_events' => $timelineEvents->count(),
             'total' => $allEvents->count()
         ]);
-    
+
         return response()->json($allEvents);
     }
 
@@ -416,12 +418,14 @@ class EventController extends Controller
     {
         try {
             $candidate = Candidate::with('department')->findOrFail($candidateId);
-            
+
             // Check access permission
             $user = Auth::user();
-            if ($user->hasRole('department') && 
-                $user->department_id && 
-                $candidate->department_id != $user->department_id) {
+            if (
+                $user->hasRole('department') &&
+                $user->department_id &&
+                $candidate->department_id != $user->department_id
+            ) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Tidak memiliki akses ke kandidat ini.'
@@ -429,7 +433,7 @@ class EventController extends Controller
             }
 
             $events = collect();
-            
+
             // Stage mapping
             $stages = [
                 'cv_review_date' => ['CV Review', 'cv_review_status'],
@@ -446,7 +450,7 @@ class EventController extends Controller
                 if ($candidate->$dateField) {
                     $status = $candidate->$statusField ?? 'Unknown';
                     $isCompleted = in_array($status, ['LULUS', 'DISARANKAN', 'DITERIMA', 'HIRED']);
-                    
+
                     $events->push([
                         'id' => 'candidate_' . $candidate->id . '_' . str_replace('_date', '', $dateField),
                         'title' => ($isCompleted ? '✓ ' : '⏳ ') . $candidate->nama . ' - ' . $stageName,
@@ -466,7 +470,7 @@ class EventController extends Controller
             // Add next test if available
             if ($candidate->next_test_date && $candidate->next_test_stage) {
                 $stageName = Str::title(str_replace('_', ' ', $candidate->next_test_stage));
-                
+
                 $events->push([
                     'id' => 'next_test_' . $candidate->id,
                     'title' => '📅 ' . $candidate->nama . ' - ' . $stageName,
@@ -496,7 +500,7 @@ class EventController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error getting candidate timeline events: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mengambil data timeline kandidat.'
@@ -519,7 +523,7 @@ class EventController extends Controller
         return response()->json([
             'candidates_with_next_test' => $candidates,
             'count' => $candidates->count(),
-            'sample_dates' => $candidates->take(5)->map(function($c) {
+            'sample_dates' => $candidates->take(5)->map(function ($c) {
                 return [
                     'nama' => $c->nama,
                     'next_test_date' => $c->next_test_date,
