@@ -86,7 +86,7 @@ class DepartmentController extends Controller
             ->select('name')
             ->distinct()
             ->pluck('name');
-            
+
         return response()->json($positions);
     }
 }

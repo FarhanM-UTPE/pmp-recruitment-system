@@ -23,6 +23,7 @@ class MPPSubmission extends Model
         'created_by_user_id',
         'department_id',
         'year', // Added year to fillable
+        'submission_type',
         'status',
         'submitted_at',
         'approved_at',

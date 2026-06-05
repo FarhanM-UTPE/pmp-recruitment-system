@@ -67,6 +67,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'nrp',
         'password',
         'department_id',
         'status',
@@ -134,7 +135,7 @@ class User extends Authenticatable
         if ($this->hasRole('admin')) {
             return 'Administrator';
         }
-        
+
         // Fallback to the first role name if no specific display name is defined
         return ucfirst(str_replace('_', ' ', $this->getRoleNames()->first() ?? 'N/A'));
     }
@@ -153,7 +154,7 @@ class User extends Authenticatable
     public function getRoleDisplayAttribute()
     {
         $primaryRole = $this->primary_role;
-        
+
         $roleNames = [
             'admin' => 'Administrator',
             'team_hc' => 'Team HC',
@@ -169,7 +170,7 @@ class User extends Authenticatable
     public function getRoleBadgeClassAttribute()
     {
         $primaryRole = $this->primary_role;
-        
+
         $badgeClasses = [
             'admin' => 'bg-red-100 text-red-800',
             'team_hc' => 'bg-blue-100 text-blue-800',

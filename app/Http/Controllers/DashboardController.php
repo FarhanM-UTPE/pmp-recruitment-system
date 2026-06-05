@@ -6,6 +6,8 @@ use App\Models\Candidate;
 use App\Models\Event;
 use App\Models\Department;
 use App\Models\Application;
+use App\Models\MasterData;
+use App\Services\YearProvider;
 use App\Models\ApplicationStage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +28,7 @@ class DashboardController extends Controller
                 $query->where('department_id', $user->department_id);
             });
         }
-        
+
         // Filter by mpp_year to match Candidate List
         if ($year) {
             $baseQuery->where('applications.mpp_year', $year);
@@ -43,31 +45,31 @@ class DashboardController extends Controller
         $filteredApplicationIds = (clone $baseQuery)->pluck('applications.id')->toArray();
 
         $stats = [
-            'total_candidates'      => 0,
+            'total_candidates' => 0,
             'candidates_in_process' => 0,
-            'candidates_passed'     => 0,
-            'candidates_failed'     => 0,
-            'candidates_cancelled'  => 0,
+            'candidates_passed' => 0,
+            'candidates_failed' => 0,
+            'candidates_cancelled' => 0,
         ];
 
         if (!empty($filteredApplicationIds)) {
             $latestApplicationStages = DB::table('application_stages')
                 ->join('applications', 'application_stages.application_id', '=', 'applications.id')
                 ->whereIn('application_stages.application_id', $filteredApplicationIds)
-                ->whereIn('application_stages.id', function($subQuery) {
+                ->whereIn('application_stages.id', function ($subQuery) {
                     $subQuery->select(DB::raw('MAX(id)'))
                         ->from('application_stages')
                         ->groupBy('application_id');
                 })
                 ->select('application_stages.status', 'applications.overall_status as parent_status')
                 ->get();
-            
+
             $stats['total_candidates'] = count($latestApplicationStages);
-            
-            foreach($latestApplicationStages as $rec) {
+
+            foreach ($latestApplicationStages as $rec) {
                 $rawStatus = strtoupper(trim($rec->status));
                 $parentStatus = strtoupper(trim($rec->parent_status ?? ''));
-                
+
                 if (in_array($parentStatus, ['CANCEL', 'PINDAH'])) {
                     $stats['candidates_cancelled']++;
                 } else {
@@ -84,9 +86,53 @@ class DashboardController extends Controller
             }
         }
 
-        $applications = (clone $baseQuery)->with(['stages' => function($query) {
-            $query->orderBy('scheduled_date', 'desc')->orderBy('id', 'desc');
-        }])->get();
+        $masterDataCancelSum = DB::table('master_data')
+            ->where('type', 'candidate_stage_status')
+            ->where('key', 'LIKE', '%|CANCEL')
+            ->where('active', 1)
+            ->when($year, function ($q) use ($year) {
+                return $q->where('year', $year);
+            })
+            ->when($user->hasRole('kepala departemen') && $user->department_id, function ($q) use ($user) {
+                return $q->where('department_id', $user->department_id);
+            })
+            ->sum('value');
+
+        // 2. Sum all values where key ends with TIDAK LULUS
+        $masterDataFailSum = DB::table('master_data')
+            ->where('type', 'candidate_stage_status')
+            ->where('key', 'LIKE', '%|TIDAK LULUS')
+            ->where('active', 1)
+            ->when($year, function ($q) use ($year) {
+                return $q->where('year', $year);
+            })
+            ->when($user->hasRole('kepala departemen') && $user->department_id, function ($q) use ($user) {
+                return $q->where('department_id', $user->department_id);
+            })
+            ->sum('value');
+
+        // 3. Grand total sum of all values in the master_data table for this type
+        $masterDataTotalSum = DB::table('master_data')
+            ->where('type', 'candidate_stage_status')
+            ->where('active', 1)
+            ->when($year, function ($q) use ($year) {
+                return $q->where('year', $year);
+            })
+            ->when($user->hasRole('kepala departemen') && $user->department_id, function ($q) use ($user) {
+                return $q->where('department_id', $user->department_id);
+            })
+            ->sum('value');
+
+        // Append the values to your stats logic
+        $stats['candidates_cancelled'] += (int) $masterDataCancelSum;
+        $stats['candidates_failed'] += (int) $masterDataFailSum;
+        $stats['total_candidates'] += (int) $masterDataTotalSum;
+
+        $applications = (clone $baseQuery)->with([
+            'stages' => function ($query) {
+                $query->orderBy('scheduled_date', 'desc')->orderBy('id', 'desc');
+            }
+        ])->get();
 
         $recentCandidatesQuery = Candidate::with('department', 'applications')
             ->orderBy('created_at', 'desc')
@@ -94,22 +140,48 @@ class DashboardController extends Controller
         if ($user->hasRole('kepala departemen')) {
             $recentCandidatesQuery->where('department_id', $user->department_id);
         }
+
+        $oldestCandidateQuery = Candidate::select('candidates.*')
+            ->with('department', 'applications.vacancy')
+            ->whereHas('applications', function ($query) {
+                $query->whereIn('overall_status', ['PROSES', 'On Process']);
+            })
+            ->addSelect([
+                'last_stage_updated_at' => ApplicationStage::select('application_stages.updated_at')
+                    ->join('applications', 'application_stages.application_id', '=', 'applications.id')
+                    ->whereColumn('applications.candidate_id', 'candidates.id')
+                    ->orderBy('application_stages.updated_at', 'desc')
+                    ->limit(1)
+            ])
+            ->orderBy('last_stage_updated_at', 'asc')
+            ->limit(5);
+
+        // Check if the user selected a specific department from the dropdown
+        if ($request->filled('oldest_dept')) {
+            $oldestCandidateQuery->where('department_id', $request->oldest_dept);
+        }
+        // Otherwise, fallback to the default role restriction
+        elseif ($user->hasRole('kepala departemen')) {
+            $oldestCandidateQuery->where('department_id', $user->department_id);
+        }
+
+        $oldest_candidates = $oldestCandidateQuery->get();
         $recent_candidates = $recentCandidatesQuery->get();
 
-        $distributionQuery = ApplicationStage::whereIn('id', function($query) use ($year, $user) {
+        $distributionQuery = ApplicationStage::whereIn('id', function ($query) use ($year, $user) {
             $query->select(DB::raw('MAX(id)'))
                 ->from('application_stages')
-                ->whereIn('application_id', function($sub) use ($year, $user) {
+                ->whereIn('application_id', function ($sub) use ($year, $user) {
                     $sub->select('id')
                         ->from('applications')
                         ->where('overall_status', 'PROSES');
-                    
+
                     if ($year) {
                         $sub->where('mpp_year', $year);
                     }
-                    
+
                     if ($user->hasRole('kepala departemen')) {
-                        $sub->whereIn('candidate_id', function($csub) use ($user) {
+                        $sub->whereIn('candidate_id', function ($csub) use ($user) {
                             $csub->select('id')
                                 ->from('candidates')
                                 ->where('department_id', $user->department_id);
@@ -139,7 +211,7 @@ class DashboardController extends Controller
         ];
 
         $allStages = collect($stageDisplayMap)->map(function ($displayName, $stageKey) {
-            return (object)[
+            return (object) [
                 'stage_name' => $stageKey,
                 'count' => 0,
             ];
@@ -158,7 +230,7 @@ class DashboardController extends Controller
             return $stageOrderMap[$item->stage_name] ?? 999;
         });
 
-        $process_distribution = $sortedData->map(function($item) use ($stageDisplayMap) {
+        $process_distribution = $sortedData->map(function ($item) use ($stageDisplayMap) {
             return [
                 'stage' => $item->stage_name,
                 'display_name' => $stageDisplayMap[$item->stage_name] ?? Str::title(str_replace('_', ' ', $item->stage_name)),
@@ -172,14 +244,14 @@ class DashboardController extends Controller
             ->select('candidates.jk', DB::raw('count(*) as count'))
             ->groupBy('candidates.jk')
             ->get();
-        
+
         // Normalize gender values - combine all empty/null as unknown
         $genderMap = [];
         $unknownCount = 0;
-        
+
         foreach ($genderRaw as $item) {
             $jk = trim($item->jk ?? '');
-            
+
             if (empty($jk)) {
                 // All NULL and empty string combined as unknown
                 $unknownCount += $item->count;
@@ -187,32 +259,32 @@ class DashboardController extends Controller
                 // Normalize gender values
                 $normalizedJk = $jk;
                 $lowerJk = strtolower($jk);
-                
+
                 if (in_array($lowerJk, ['laki-laki', 'l', 'laki laki', 'male'])) {
                     $normalizedJk = 'L';
                 } elseif (in_array($lowerJk, ['perempuan', 'p', 'female'])) {
                     $normalizedJk = 'P';
                 }
-                
+
                 if (!isset($genderMap[$normalizedJk])) {
                     $genderMap[$normalizedJk] = 0;
                 }
                 $genderMap[$normalizedJk] += $item->count;
             }
         }
-        
+
         // Build final collection
         $gender_distribution = collect();
-        
+
         // Add known genders first (sorted by count)
         arsort($genderMap);
         foreach ($genderMap as $jk => $count) {
-            $gender_distribution->push((object)['jk' => $jk, 'count' => $count]);
+            $gender_distribution->push((object) ['jk' => $jk, 'count' => $count]);
         }
-        
+
         // Add unknown at the end
         if ($unknownCount > 0) {
-            $gender_distribution->push((object)['jk' => null, 'count' => $unknownCount]);
+            $gender_distribution->push((object) ['jk' => null, 'count' => $unknownCount]);
         }
 
         // University Distribution - Using same approach as StatisticsController
@@ -227,27 +299,25 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
+        // $departments = [];
+        // if ($user->hasRole('admin') || $user->hasRole('super_admin')) {
+        //     $departments = Department::orderBy('name')->get();
+        // }
         $departments = [];
-        if ($user->hasRole('admin') || $user->hasRole('super_admin')) {
+        if ($user->hasRole(['admin', 'super_admin', 'team_hc', 'team_hc_2'])) {
             $departments = Department::orderBy('name')->get();
         }
 
         $summaryMonth = $request->get('summary_month', Carbon::now()->subMonthNoOverflow()->month);
-        $summaryYear = $request->get('summary_year', Carbon::now()->subMonthNoOverflow()->year);
+        $summaryYear = $request->get('summary_year', $request->get('year', Carbon::now()->subMonthNoOverflow()->year));
         $monthlySummary = $this->getMonthlySummary($summaryYear, $summaryMonth);
 
-        $availableYears = Application::selectRaw('YEAR(created_at) as year')
-            ->distinct()
-            ->orderBy('year', 'desc')
-            ->pluck('year')
-            ->toArray();
-        if (!in_array(date('Y'), $availableYears)) {
-            array_unshift($availableYears, date('Y'));
-        }
+        $availableYears = YearProvider::availableYears();
 
         return view('dashboard', [
             'stats' => $stats,
             'recent_candidates' => $recent_candidates,
+            'oldest_candidates' => $oldest_candidates,
             'process_distribution' => $process_distribution,
             'monthlySummary' => $monthlySummary,
             'summaryMonth' => $summaryMonth,
@@ -269,18 +339,29 @@ class DashboardController extends Controller
         $startOfMonth = $date->copy()->startOfMonth();
         $endOfMonth = $date->copy()->endOfMonth();
 
-        $applications = Application::whereBetween('created_at', [$startOfMonth, $endOfMonth])->count();
-        
+        $applications = Application::whereBetween('created_at', [$startOfMonth, $endOfMonth])
+            ->when($year, function ($query) use ($year) {
+                return $query->where('mpp_year', $year);
+            })
+            ->count();
+
         $hired = Application::where('overall_status', 'LULUS')
-                          ->whereBetween('hired_date', [$startOfMonth, $endOfMonth])
-                          ->count();
+            ->when($year, function ($query) use ($year) {
+                return $query->where('mpp_year', $year);
+            })
+            ->whereBetween('hired_date', [$startOfMonth, $endOfMonth])
+            ->count();
 
         return [
             'month_name' => $date->isoFormat('MMMM YYYY'),
             'total_applications' => $applications,
             'total_hired' => $hired,
             'conversion_rate' => $applications > 0 ? round(($hired / $applications) * 100, 1) : 0,
-            'filter_url' => route('candidates.index', ['created_from' => $startOfMonth->toDateString(), 'created_to' => $endOfMonth->toDateString()]),
+            'filter_url' => route('candidates.index', [
+                'created_from' => $startOfMonth->toDateString(),
+                'created_to' => $endOfMonth->toDateString(),
+                'year' => $year ?: null,
+            ]),
         ];
     }
 
@@ -292,18 +373,18 @@ class DashboardController extends Controller
         // Get only PENDING/IN-PROGRESS scheduled stages for each application
         $stagesQuery = ApplicationStage::with(['application.candidate'])
             ->whereNotNull('scheduled_date')
-            ->where(function($q) {
+            ->where(function ($q) {
                 $q->whereIn('status', ['PENDING', 'PROSES', 'MENUNGGU'])
-                  ->orWhereNull('status');
+                    ->orWhereNull('status');
             })
-            ->whereHas('application', function($q) {
+            ->whereHas('application', function ($q) {
                 $q->whereNotIn('overall_status', ['CANCEL', 'PINDAH']);
             })
             ->whereDate('scheduled_date', '>=', now()->startOfYear())
             ->whereDate('scheduled_date', '<=', now()->addYear()->endOfYear());
 
         if ($user->hasRole('kepala departemen')) {
-            $stagesQuery->whereHas('application.candidate', function($q) use ($user) {
+            $stagesQuery->whereHas('application.candidate', function ($q) use ($user) {
                 $q->where('department_id', $user->department_id);
             });
         }
@@ -312,14 +393,14 @@ class DashboardController extends Controller
         $allScheduledStages = $stagesQuery->get();
         $latestStagesByApplication = $allScheduledStages->groupBy('application_id')->map(function ($stages) {
             // Sort by scheduled_date desc, then by id desc to get the most recent one
-            return $stages->sortByDesc(function($stage) {
+            return $stages->sortByDesc(function ($stage) {
                 return $stage->scheduled_date . '_' . $stage->id;
             })->first();
         });
 
         // Process ApplicationStage events first
         $processed = []; // To track candidate_id + date to avoid duplicates
-        
+
         foreach ($latestStagesByApplication as $stage) {
             $displayName = Candidate::formatStageName($stage->stage_name);
             $candidateName = $stage->application->candidate->nama ?? 'Unknown';
@@ -339,7 +420,7 @@ class DashboardController extends Controller
                 'applicant_id' => $stage->application->candidate->applicant_id ?? 'N/A',
                 'is_custom' => false
             ];
-            
+
             // Mark this candidate + date as processed
             $processed[$candidateId . '_' . $dateKey] = true;
         }
@@ -347,7 +428,7 @@ class DashboardController extends Controller
         $customEventsQuery = Event::whereNotNull('date')
             ->whereDate('date', '>=', now()->startOfYear())
             ->whereDate('date', '<=', now()->addYear()->endOfYear());
-        
+
         if ($user->hasRole('kepala departemen')) {
             $customEventsQuery->where('department_id', $user->department_id);
         }
@@ -423,28 +504,8 @@ class DashboardController extends Controller
     public function getAvailableYears()
     {
         $user = Auth::user();
-        
-        $query = Application::query();
-        
-        if ($user->hasRole('kepala departemen')) {
-            $query->whereHas('candidate', function ($cq) use ($user) {
-                $cq->where('department_id', $user->department_id);
-            });
-        }        
-        
-        $years = $query
-            ->whereNotNull('mpp_year')
-            ->select('mpp_year as year')
-            ->distinct()
-            ->orderBy('year', 'desc')
-            ->pluck('year')
-            ->toArray();
-
-        $currentYear = (int) date('Y');
-        if (!in_array($currentYear, $years)) {
-            array_unshift($years, $currentYear);
-        }
-
+        // Use the unified YearProvider so all pages return the same year list
+        $years = \App\Services\YearProvider::availableYears();
         return response()->json($years);
     }
 }

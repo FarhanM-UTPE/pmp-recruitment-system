@@ -8,12 +8,9 @@
 <div class="flex items-center gap-2">
     <label for="year" class="text-sm font-medium text-gray-700 hidden sm:block">Tahun:</label>
     <select name="year" id="yearFilter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[80px]">
-        @php
-            $currentYear = date('Y');
-            for ($year = $currentYear + 1; $year >= $currentYear - 2; $year--) {
-                echo '<option value="' . $year . '"' . (request('year', $currentYear) == $year ? ' selected' : '') . '>' . $year . '</option>';
-            }
-        @endphp
+        @foreach ($availableYears as $yearOption)
+            <option value="{{ $yearOption }}" {{ $year == $yearOption ? 'selected' : '' }}>{{ $yearOption }}</option>
+        @endforeach
     </select>
 </div>
 @endpush
@@ -282,6 +279,57 @@
         </div>
     </div>
 
+    {{-- Oldest Candidates --}}
+    <div id="oldestCandidatesSection" class="bg-white rounded-xl p-4 sm:p-6 border border-gray-200 shadow-sm">
+        <div class="flex items-center justify-between mb-4 gap-2">
+            <h3 class="text-lg font-semibold text-gray-900">Kandidat Terlama</h3>
+            
+            {{-- Department Filter specifically for Oldest Candidates --}}
+            @if(!empty($departments) && count($departments) > 0)
+            <select id="oldestDeptFilter" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 max-w-[150px] truncate">
+                <option value="">Semua Dept</option>
+                @foreach($departments as $dept)
+                    <option value="{{ $dept->id }}" {{ request('oldest_dept') == $dept->id ? 'selected' : '' }}>
+                        {{ $dept->name }}
+                    </option>
+                @endforeach
+            </select>
+            @endif
+        </div>
+
+        <div class="space-y-3">
+            @forelse($oldest_candidates ?? [] as $candidate)
+            <a href="{{ route('candidates.show', $candidate->id ?? '#') }}" 
+            class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div class="flex-1 min-w-0">
+                    <p class="font-medium text-gray-900 truncate">{{ $candidate->nama ?? 'Unknown Name' }}</p>
+                    <p class="text-sm text-gray-600 truncate">{{ $candidate->applications->first()->vacancies->name ?? 'No Position' }}</p>
+                    @if($candidate->department)
+                        <p class="text-xs text-gray-500">{{ $candidate->department->name ?? 'No Department' }}</p>
+                    @endif
+                </div>
+                <div class="text-right flex-shrink-0">
+                    <span class="text-xs text-gray-500">
+                        @if($candidate->last_stage_updated_at)
+                            {{ \Carbon\Carbon::parse($candidate->last_stage_updated_at)->diffForHumans() }}
+                        @else
+                            Belum ada stage
+                        @endif
+                    </span>
+                    @if($candidate->current_stage)
+                        <p class="text-xs text-blue-600 font-medium">{{ $candidate->current_stage_display }}</p>
+                    @endif
+                </div>
+            </a>
+            @empty
+            <div class="text-center py-8">
+                <i class="fas fa-users text-4xl text-gray-300 mb-3"></i>
+                <p class="text-gray-500">Belum ada kandidat terlama.</p>
+            </div>
+            @endforelse
+        </div>
+    </div>
+
     {{-- Process Distribution --}}
     <div class="bg-white rounded-xl p-4 sm:p-6 border border-gray-200 shadow-sm">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">Distribusi Tahapan</h3>
@@ -367,22 +415,18 @@
 </div>
 
 {{-- Monthly Summary --}}
-<div class="bg-white rounded-xl p-5 mt-6 sm:mt-8 shadow-sm border border-gray-100">
+<div id="monthlySummarySection" class="bg-white rounded-xl p-5 mt-6 sm:mt-8 shadow-sm border border-gray-100">
     <div class="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4 mb-4">
         <h3 class="text-lg font-semibold text-gray-900">Ringkasan Per Bulan</h3>
-        <form id="monthlySummaryForm" method="GET" action="{{ route('dashboard') }}" class="flex flex-wrap items-center gap-2">
+        <form id="monthlySummaryForm" method="GET" action="{{ route('dashboard') }}#monthlySummarySection" class="flex flex-wrap items-center gap-2">
             <label for="summary_month" class="sr-only">Bulan Ringkasan</label>
-            <select name="summary_month" id="summary_month" class="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            <select name="summary_month" id="summary_month" onchange="this.form.submit()" class="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
                 @foreach (range(1, 12) as $month)
                     <option value="{{ $month }}" {{ $summaryMonth == $month ? 'selected' : '' }}>{{ Carbon\Carbon::create()->month($month)->isoFormat('MMMM') }}</option>
                 @endforeach
             </select>
-            <label for="summary_year" class="sr-only">Tahun Ringkasan</label>
-            <select name="summary_year" id="summary_year" class="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                @foreach ($availableYears as $yearOption)
-                    <option value="{{ $yearOption }}" {{ $summaryYear == $yearOption ? 'selected' : '' }}>{{ $yearOption }}</option>
-                @endforeach
-            </select>
+            <input type="hidden" name="summary_year" id="summary_year" value="{{ $year }}" />
+            <input type="hidden" name="year" value="{{ $year }}" />
             {{-- Tombol submit tidak lagi diperlukan --}}
         </form>
     </div>
@@ -415,12 +459,36 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const oldestDeptFilter = document.getElementById('oldestDeptFilter');
+    if (oldestDeptFilter) {
+        oldestDeptFilter.addEventListener('change', function() {
+            const currentUrl = new URL(window.location);
+            if (this.value) {
+                currentUrl.searchParams.set('oldest_dept', this.value);
+            } else {
+                currentUrl.searchParams.delete('oldest_dept');
+            }
+            currentUrl.hash = 'oldestCandidatesSection';
+            window.location.href = currentUrl.toString();
+        });
+    }
+
     const yearFilter = document.getElementById('yearFilter');
     if (yearFilter) {
         yearFilter.addEventListener('change', function() {
             const currentUrl = new URL(window.location);
             currentUrl.searchParams.set('year', this.value);
             window.location.href = currentUrl.toString();
+        });
+    }
+
+    const summaryForm = document.getElementById('monthlySummaryForm');
+    if (summaryForm) {
+        const summaryInputs = summaryForm.querySelectorAll('select');
+        summaryInputs.forEach(input => {
+            input.addEventListener('change', () => {
+                summaryForm.submit();
+            });
         });
     }
 
@@ -715,16 +783,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Auto-submit for Monthly Summary filter
-    const summaryForm = document.getElementById('monthlySummaryForm');
-    if (summaryForm) {
-        const summaryInputs = summaryForm.querySelectorAll('select');
-        summaryInputs.forEach(input => {
-            input.addEventListener('change', () => {
-                summaryForm.submit();
-            });
-        });
-    }
 });
 </script>
 @endpush

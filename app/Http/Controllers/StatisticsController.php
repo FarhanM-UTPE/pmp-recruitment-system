@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Application;
 use App\Models\Candidate;
+use App\Models\MasterData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -62,22 +63,25 @@ class StatisticsController extends Controller
 
         // $activeVacancies = $activeVacanciesQuery->get();
 
-        return view('statistics.index', compact(
-            'kpiData',
-            'funnelData',
-            'sourceData',
-            'genderData',
-            'universityData',
-            'universityPassRateData',
-            'monthlyData',
-            'passRateAnalysis',
-            'timelineAnalysis',
-            'sources',
-            'startDate',
-            'endDate',
-            'source',
-            // 'activeVacancies'
-        ));
+        return view(
+            'statistics.index',
+            compact(
+                'kpiData',
+                'funnelData',
+                'sourceData',
+                'genderData',
+                'universityData',
+                'universityPassRateData',
+                'monthlyData',
+                'passRateAnalysis',
+                'timelineAnalysis',
+                'sources',
+                'startDate',
+                'endDate',
+                'source',
+                // 'activeVacancies'
+            ),
+        );
     }
 
     // private function getKpiData($query)
@@ -97,29 +101,71 @@ class StatisticsController extends Controller
     //     ];
     // }
 
+    // private function getKpiData($query)
+    // {
+    //     $totalApplications = (clone $query)->count();
+    //     $hiredApplicationsQuery = (clone $query)->where('applications.overall_status', 'LULUS');
+    //     $totalHired = $hiredApplicationsQuery->count();
+
+    //     $avgTimeToHire = $hiredApplicationsQuery->selectRaw('AVG(DATEDIFF(applications.updated_at, applications.created_at)) as avg_days')
+    //         ->value('avg_days');
+
+    //     $finalAvgDays = round($avgTimeToHire ?? 0);
+
+    //     return [
+    //         'total_applications' => $totalApplications,
+    //         'total_hired' => $totalHired,
+    //         'avg_time_to_hire' => $finalAvgDays,
+    //         'conversion_rate' => $totalApplications > 0 ? round(($totalHired / $totalApplications) * 100, 1) : 0,
+    //     ];
+    // }
     private function getKpiData($query)
     {
+        $user = Auth::user();
         $totalApplications = (clone $query)->count();
+
+        // Apply department filter to master_data if applicable
+        $masterDataQuery = MasterData::query();
+        if ($user->hasRole('kepala departemen') && $user->department_id) {
+            $masterDataQuery->where('department_id', $user->department_id);
+        }
+        $totalMasterData = $masterDataQuery->sum('value');
+
+        // This base query isolates ONLY candidates who are successfully hired overall
         $hiredApplicationsQuery = (clone $query)->where('applications.overall_status', 'LULUS');
         $totalHired = $hiredApplicationsQuery->count();
 
-        $avgTimeToHire = $hiredApplicationsQuery->selectRaw('AVG(DATEDIFF(applications.updated_at, applications.created_at)) as avg_days')
+        $avgTimeToHire = $hiredApplicationsQuery
+            // 1. Join the psikotes milestone (where they passed psikotes)
+            ->join('application_stages as psikotes_stage', function ($join) {
+                $join->on('applications.id', '=', 'psikotes_stage.application_id')->where('psikotes_stage.stage_name', '=', 'psikotes')->where('psikotes_stage.status', '=', 'LULUS');
+            })
+            // 2. Join the hiring milestone (ensuring this specific stage status is also LULUS)
+            ->join('application_stages as hiring_stage', function ($join) {
+                $join->on('applications.id', '=', 'hiring_stage.application_id')->where('hiring_stage.stage_name', '=', 'hiring')->where('hiring_stage.status', '=', 'LULUS');
+            })
+            // 3. Compute average time between these two specific lifecycle moments
+            ->selectRaw('AVG(DATEDIFF(hiring_stage.created_at, psikotes_stage.created_at)) as avg_days')
             ->value('avg_days');
 
         $finalAvgDays = round($avgTimeToHire ?? 0);
-
+        $masterDataQuery = MasterData::query();
+        if ($user->hasRole('kepala departemen') && $user->department_id) {
+            $masterDataQuery->where('department_id', $user->department_id);
+        }
+        $totalMasterData = $masterDataQuery->sum('value');
         return [
-            'total_applications' => $totalApplications,
+            'total_applications' => $totalApplications + $totalMasterData,
             'total_hired' => $totalHired,
             'avg_time_to_hire' => $finalAvgDays,
-            'conversion_rate' => $totalApplications > 0 ? round(($totalHired / $totalApplications) * 100, 1) : 0,
+            'conversion_rate' => $totalApplications > 0 ? round(($totalHired / ($totalApplications + $totalMasterData)) * 100, 1) : 0,
         ];
     }
 
     // private function getRecruitmentFunnelData($query)
     // {
     //     $totalApplications = (clone $query)->count();
-        
+
     //     $stages = [
     //         'Psikotes' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'psikotes');})->count(),
     //         'Interview HC' => (clone $query)->whereHas('stages', function($q) {$q->where('stage_name', 'hc_interview');})->count(),
@@ -147,8 +193,7 @@ class StatisticsController extends Controller
     private function getSourceEffectivenessData($startDate, $endDate, $source)
     {
         $user = Auth::user();
-        $query = DB::table('applications')
-            ->join('candidates', 'applications.candidate_id', '=', 'candidates.id');
+        $query = DB::table('applications')->join('candidates', 'applications.candidate_id', '=', 'candidates.id');
 
         if ($user->hasRole('kepala departemen') && $user->department_id) {
             $query->where('candidates.department_id', $user->department_id);
@@ -162,10 +207,8 @@ class StatisticsController extends Controller
             $query->where('candidates.source', $source);
         }
 
-        return $query->select('candidates.source', 
-                DB::raw('COUNT(*) as total_applications'),
-                DB::raw('SUM(CASE WHEN applications.overall_status = \'LULUS\' THEN 1 ELSE 0 END) as hired_count')
-            )
+        return $query
+            ->select('candidates.source', DB::raw('COUNT(*) as total_applications'), DB::raw('SUM(CASE WHEN applications.overall_status = \'LULUS\' THEN 1 ELSE 0 END) as hired_count'))
             ->whereNotNull('candidates.source')
             ->groupBy('candidates.source')
             ->orderBy('hired_count', 'desc')
@@ -179,24 +222,20 @@ class StatisticsController extends Controller
 
     private function getGenderDistributionData($query)
     {
-        $data = (clone $query)
-            ->join('candidates', 'applications.candidate_id', '=', 'candidates.id')
-            ->select('candidates.jk', DB::raw('count(*) as count'))
-            ->groupBy('candidates.jk')
-            ->get();
+        $data = (clone $query)->join('candidates', 'applications.candidate_id', '=', 'candidates.id')->select('candidates.jk', DB::raw('count(*) as count'))->groupBy('candidates.jk')->get();
 
         // Transform the collection into a normalized associative array for Chart.js
         $transformedData = [
             'Laki-laki' => 0,
             'Perempuan' => 0,
         ];
-        
+
         $unknownCount = 0;
 
         foreach ($data as $item) {
             $jk = trim($item->jk ?? '');
             $lowerJk = strtolower($jk);
-            
+
             if (empty($jk)) {
                 $unknownCount += $item->count;
             } elseif (in_array($lowerJk, ['laki-laki', 'l', 'laki laki', 'male'])) {
@@ -207,7 +246,7 @@ class StatisticsController extends Controller
                 $unknownCount += $item->count;
             }
         }
-        
+
         if ($unknownCount > 0) {
             $transformedData['Tidak Diketahui'] = $unknownCount;
         }
@@ -217,16 +256,7 @@ class StatisticsController extends Controller
 
     private function getUniversityDistributionData($query)
     {
-        $data = (clone $query)
-            ->join('candidates', 'applications.candidate_id', '=', 'candidates.id')
-            ->join('educations', 'candidates.id', '=', 'educations.candidate_id')
-            ->select('educations.institution', DB::raw('count(*) as count'))
-            ->whereNotNull('educations.institution')
-            ->where('educations.institution', '!=', '')
-            ->groupBy('educations.institution')
-            ->orderByDesc('count')
-            ->limit(10)
-            ->get();
+        $data = (clone $query)->join('candidates', 'applications.candidate_id', '=', 'candidates.id')->join('educations', 'candidates.id', '=', 'educations.candidate_id')->select('educations.institution', DB::raw('count(*) as count'))->whereNotNull('educations.institution')->where('educations.institution', '!=', '')->groupBy('educations.institution')->orderByDesc('count')->limit(10)->get();
 
         // Transform the collection into an associative array for Chart.js
         $transformedData = [];
@@ -240,9 +270,7 @@ class StatisticsController extends Controller
     private function getMonthlyApplicationData($startDate, $endDate, $source)
     {
         $user = Auth::user();
-        $query = DB::table('applications')
-            ->join('candidates', 'applications.candidate_id', '=', 'candidates.id')
-            ->select(DB::raw('YEAR(applications.created_at) as year, MONTH(applications.created_at) as month'), DB::raw('COUNT(*) as count'));
+        $query = DB::table('applications')->join('candidates', 'applications.candidate_id', '=', 'candidates.id')->select(DB::raw('YEAR(applications.created_at) as year, MONTH(applications.created_at) as month'), DB::raw('COUNT(*) as count'));
 
         if ($user->hasRole('kepala departemen') && $user->department_id) {
             $query->where('candidates.department_id', $user->department_id);
@@ -257,10 +285,12 @@ class StatisticsController extends Controller
             $query->where('candidates.source', $source);
         }
 
-        $data = $query->groupBy('year', 'month')
+        $data = $query
+            ->groupBy('year', 'month')
             ->orderBy('year')
             ->orderBy('month')
-            ->get()->mapWithKeys(function ($item) {
+            ->get()
+            ->mapWithKeys(function ($item) {
                 return [$item->year . '-' . $item->month => $item->count];
             });
 
@@ -306,7 +336,7 @@ class StatisticsController extends Controller
     //         $failed = (clone $totalReachedQuery)->whereHas('stages', function($q) use ($stage) {
     //             $q->where('stage_name', $stage['stage_name'])->whereIn('status', $stage['fail_values']);
     //         })->count();
-            
+
     //         $totalEvaluated = $passed + $failed;
     //         $inProgress = $totalReached - $totalEvaluated;
     //         if ($inProgress < 0) {
@@ -331,25 +361,21 @@ class StatisticsController extends Controller
     //     return $analysis;
     // }
 
-    
     private function getRecruitmentFunnelData($query)
     {
         $totalApplications = (clone $query)->count();
         $filteredApplicationIds = (clone $query)->pluck('applications.id')->toArray();
 
         // 1. Fetch all stages to determine highest reach
-        $allStages = DB::table('application_stages')
-            ->whereIn('application_id', $filteredApplicationIds)
-            ->select('application_id', 'stage_name')
-            ->get();
+        $allStages = DB::table('application_stages')->whereIn('application_id', $filteredApplicationIds)->select('application_id', 'stage_name')->get();
 
         $appHighestWeight = [];
         foreach ($allStages as $rec) {
             $appId = $rec->application_id;
             $sName = strtolower(trim($rec->stage_name));
-            
+
             // Map stage weights
-            $weight = match($sName) {
+            $weight = match ($sName) {
                 'psikotes' => 1,
                 'hc_interview' => 2,
                 'user_interview' => 3,
@@ -374,18 +400,26 @@ class StatisticsController extends Controller
         ];
 
         foreach ($appHighestWeight as $appId => $hw) {
-            if ($hw >= 1) $counts['Psikotes']++;
-            if ($hw >= 2) $counts['Interview HC']++;
-            if ($hw >= 3) $counts['Interview User']++;
-            if ($hw >= 5) $counts['Offering']++;
+            if ($hw >= 1) {
+                $counts['Psikotes']++;
+            }
+            if ($hw >= 2) {
+                $counts['Interview HC']++;
+            }
+            if ($hw >= 3) {
+                $counts['Interview User']++;
+            }
+            if ($hw >= 5) {
+                $counts['Offering']++;
+            }
         }
-        
+
         $counts['Hired'] = (clone $query)->where('overall_status', 'LULUS')->count();
 
         // 3. Build funnel array
         $funnel = [];
         $previousStageCount = $totalApplications;
-        
+
         $stagesToMap = [
             'Psikotes' => $counts['Psikotes'],
             'Interview HC' => $counts['Interview HC'],
@@ -407,16 +441,153 @@ class StatisticsController extends Controller
         return $funnel;
     }
 
+    // private function getPassRateAnalysisData($baseQuery)
+    // {
+    //     $stageOrder = [
+    //         'psikotes'        => 1,
+    //         'hc_interview'    => 2,
+    //         'user_interview'  => 3,
+    //         'interview_bod'   => 4,
+    //         'offering_letter' => 5,
+    //         'mcu'             => 6,
+    //         'hiring'          => 7,
+    //     ];
+
+    //     $stages = [
+    //         ['name' => 'Psikotes', 'stage_name' => 'psikotes', 'pass_values' => ['LULUS', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK LULUS', 'FAIL']],
+    //         ['name' => 'Interview HC', 'stage_name' => 'hc_interview', 'pass_values' => ['LULUS', 'DISARANKAN', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DISARANKAN', 'FAIL']],
+    //         ['name' => 'Interview User', 'stage_name' => 'user_interview', 'pass_values' => ['LULUS', 'DISARANKAN', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DISARANKAN', 'FAIL']],
+    //         ['name' => 'Interview BOD', 'stage_name' => 'interview_bod', 'pass_values' => ['LULUS', 'DISARANKAN', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DISARANKAN', 'FAIL']],
+    //         ['name' => 'Offering Letter', 'stage_name' => 'offering_letter', 'pass_values' => ['DITERIMA', 'PASS', 'OK', 'DONE'], 'fail_values' => ['DITOLAK', 'FAIL']],
+    //         ['name' => 'MCU', 'stage_name' => 'mcu', 'pass_values' => ['LULUS', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK LULUS', 'FAIL']],
+    //         ['name' => 'Hired', 'stage_name' => 'hiring', 'pass_values' => ['HIRED', 'PASS', 'OK', 'DONE'], 'fail_values' => ['TIDAK DIHIRING', 'FAIL']],
+    //     ];
+
+    //     $filteredApplicationIds = (clone $baseQuery)->pluck('applications.id')->toArray();
+
+    //     $allStages = DB::table('application_stages')
+    //         ->join('applications', 'application_stages.application_id', '=', 'applications.id')
+    //         ->whereIn('application_stages.application_id', $filteredApplicationIds)
+    //         ->select(
+    //             'application_stages.application_id',
+    //             'application_stages.stage_name',
+    //             'application_stages.status',
+    //             'applications.overall_status as parent_status'
+    //         )
+    //         ->get();
+
+    //     // 1. Map candidate journeys
+    //     $appJourneys = [];
+    //     foreach ($allStages as $rec) {
+    //         $appId = $rec->application_id;
+    //         $sName = strtolower(trim($rec->stage_name));
+    //         $weight = $stageOrder[$sName] ?? 0;
+
+    //         if (!isset($appJourneys[$appId])) {
+    //             $appJourneys[$appId] = [
+    //                 'highest_weight' => 0,
+    //                 'stages' => [],
+    //                 'parent_status' => strtoupper(trim($rec->parent_status ?? '')),
+    //             ];
+    //         }
+
+    //         if ($weight > $appJourneys[$appId]['highest_weight']) {
+    //             $appJourneys[$appId]['highest_weight'] = $weight;
+    //         }
+
+    //         $appJourneys[$appId]['stages'][$sName] = strtoupper(trim($rec->status));
+    //     }
+
+    //     $analysis = [];
+
+    //     // 2. Perform Logical Inference loop
+    //     foreach ($stages as $stage) {
+    //         $targetWeight = $stageOrder[$stage['stage_name']] ?? 0;
+
+    //         $totalReached = 0;
+    //         $passed = 0;
+    //         $failed = 0;
+    //         $inProgress = 0;
+    //         $canceled = 0;
+
+    //         foreach ($appJourneys as $appId => $journey) {
+    //             $highestWeight = $journey['highest_weight'];
+    //             $parentStatus = $journey['parent_status'];
+
+    //             // OVERRIDE FIX: If the overall application status is 'LULUS' (Hired),
+    //             // it implies they successfully completed the entire funnel (Stage 7).
+    //             if ($parentStatus === 'LULUS') {
+    //                 $highestWeight = 7;
+    //             }
+
+    //             // If candidate ever reached this stage or beyond
+    //             if ($highestWeight >= $targetWeight && $targetWeight > 0) {
+    //                 $totalReached++;
+
+    //                 // INFERENCE: Passed if highest weight is strictly greater than target weight
+    //                 if ($highestWeight > $targetWeight) {
+    //                     $passed++;
+    //                 } else {
+    //                     // Candidate's current ceiling is this stage, evaluate actual status
+    //                     $rawStatus = $journey['stages'][$stage['stage_name']] ?? '';
+
+    //                     if (in_array($parentStatus, ['CANCEL', 'PINDAH'])) {
+    //                          // Mark as failed in analysis so they aren't calculated as 'progressing'
+    //                          $canceled++;
+    //                     } else {
+    //                         // FIX APPLIED HERE: Automatically pass them if overall_status is LULUS
+    //                         if (in_array($rawStatus, $stage['pass_values']) || $parentStatus === 'LULUS') {
+    //                             $passed++;
+    //                         } elseif (in_array($rawStatus, $stage['fail_values']) || in_array($parentStatus, ['DITOLAK', 'FAILED'])) {
+    //                             $failed++;
+    //                         } elseif ($rawStatus === 'CANCEL') {
+    //                             $failed++;
+    //                         } else {
+    //                             $inProgress++;
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+
+    //         $totalEvaluated = $passed + $failed;
+    //         // $pass_rate = 0;
+    //         // if ($totalEvaluated > 0) {
+    //         //     $pass_rate = round(($passed / $totalEvaluated) * 100, 1);
+    //         // }
+    //         $totalMasterData = MasterData::where('key', 'psikotes|CANCEL')->count();
+
+    //         $pass_rate = round(($passed / $totalReached) * 100, 1);
+    //         $tidak_lulus_pass_rate = round(($failed / $totalReached) *100, 1);
+    //         $dalam_proses_pass_rate = round(($inProgress / $totalReached) *100, 1);
+    //         $canceled_pass_rate = round(($canceled / $totalReached) *100, 1);
+    //         $analysis[] = [
+    //             'name' => $stage['name'],
+    //             'total' => $totalReached,
+    //             'passed' => $passed,
+    //             'failed' => $failed,
+    //             'canceled' => $canceled,
+    //             'in_progress' => $inProgress,
+    //             'pass_rate' => $pass_rate,
+    //             'tidak_lulus_pass_rate' => $tidak_lulus_pass_rate,
+    //             'dalam_proses_pass_rate' => $dalam_proses_pass_rate,
+    //             'canceled_pass_rate' => $canceled_pass_rate
+    //         ];
+    //     }
+
+    //     return $analysis;
+    // }
+
     private function getPassRateAnalysisData($baseQuery)
     {
         $stageOrder = [
-            'psikotes'        => 1,
-            'hc_interview'    => 2,
-            'user_interview'  => 3,
-            'interview_bod'   => 4,
+            'psikotes' => 1,
+            'hc_interview' => 2,
+            'user_interview' => 3,
+            'interview_bod' => 4,
             'offering_letter' => 5,
-            'mcu'             => 6,
-            'hiring'          => 7,
+            'mcu' => 6,
+            'hiring' => 7,
         ];
 
         $stages = [
@@ -431,16 +602,7 @@ class StatisticsController extends Controller
 
         $filteredApplicationIds = (clone $baseQuery)->pluck('applications.id')->toArray();
 
-        $allStages = DB::table('application_stages')
-            ->join('applications', 'application_stages.application_id', '=', 'applications.id')
-            ->whereIn('application_stages.application_id', $filteredApplicationIds)
-            ->select(
-                'application_stages.application_id',
-                'application_stages.stage_name',
-                'application_stages.status',
-                'applications.overall_status as parent_status'
-            )
-            ->get();
+        $allStages = DB::table('application_stages')->join('applications', 'application_stages.application_id', '=', 'applications.id')->whereIn('application_stages.application_id', $filteredApplicationIds)->select('application_stages.application_id', 'application_stages.stage_name', 'application_stages.status', 'applications.overall_status as parent_status')->get();
 
         // 1. Map candidate journeys
         $appJourneys = [];
@@ -469,62 +631,72 @@ class StatisticsController extends Controller
         // 2. Perform Logical Inference loop
         foreach ($stages as $stage) {
             $targetWeight = $stageOrder[$stage['stage_name']] ?? 0;
+            $stageName = $stage['stage_name'];
 
-            $totalReached = 0;
             $passed = 0;
-            $failed = 0;
+            $failedLogic = 0;
             $inProgress = 0;
-            $canceled = 0;
+            $canceledLogic = 0;
 
             foreach ($appJourneys as $appId => $journey) {
                 $highestWeight = $journey['highest_weight'];
                 $parentStatus = $journey['parent_status'];
 
-                // OVERRIDE FIX: If the overall application status is 'LULUS' (Hired), 
-                // it implies they successfully completed the entire funnel (Stage 7).
+                // OVERRIDE FIX: If the overall application status is 'LULUS' (Hired)
                 if ($parentStatus === 'LULUS') {
                     $highestWeight = 7;
                 }
 
                 // If candidate ever reached this stage or beyond
                 if ($highestWeight >= $targetWeight && $targetWeight > 0) {
-                    $totalReached++;
-
                     // INFERENCE: Passed if highest weight is strictly greater than target weight
                     if ($highestWeight > $targetWeight) {
                         $passed++;
                     } else {
                         // Candidate's current ceiling is this stage, evaluate actual status
-                        $rawStatus = $journey['stages'][$stage['stage_name']] ?? '';
+                        $rawStatus = $journey['stages'][$stageName] ?? '';
 
-                        if (in_array($parentStatus, ['CANCEL', 'PINDAH'])) {
-                             // Mark as failed in analysis so they aren't calculated as 'progressing'
-                             $canceled++;
+                        // Evaluate logic limits (a)
+                        if (in_array($parentStatus, ['CANCEL', 'PINDAH']) || $rawStatus === 'CANCEL') {
+                            $canceledLogic++;
+                        } elseif (in_array($rawStatus, $stage['pass_values']) || $parentStatus === 'LULUS') {
+                            $passed++;
+                        } elseif (in_array($rawStatus, $stage['fail_values']) || in_array($parentStatus, ['DITOLAK', 'FAILED'])) {
+                            $failedLogic++;
                         } else {
-                            // FIX APPLIED HERE: Automatically pass them if overall_status is LULUS
-                            if (in_array($rawStatus, $stage['pass_values']) || $parentStatus === 'LULUS') {
-                                $passed++;
-                            } elseif (in_array($rawStatus, $stage['fail_values']) || in_array($parentStatus, ['DITOLAK', 'FAILED'])) {
-                                $failed++;
-                            } elseif ($rawStatus === 'CANCEL') {
-                                $failed++;
-                            } else {
-                                $inProgress++;
-                            }
+                            $inProgress++;
                         }
                     }
                 }
             }
 
-            $totalEvaluated = $passed + $failed;
-            // $pass_rate = 0;
-            // if ($totalEvaluated > 0) {
-            //     $pass_rate = round(($passed / $totalEvaluated) * 100, 1);
-            // }
-            $pass_rate = round(($passed / $totalReached) * 100, 1);
-            $tidak_lulus_pass_rate = round(($failed / $totalReached) *100, 1);
-            $dalam_proses_pass_rate = round(($inProgress / $totalReached) *100, 1);
-            $canceled_pass_rate = round(($canceled / $totalReached) *100, 1);
+            // 3. MASTER DATA INJECTION (a + b)
+            // Retrieve the numeric 'value' from master_data based on exact keys
+            // Apply department filter if user is department head
+            $user = Auth::user();
+            $masterDataQuery = DB::table('master_data')->where('active', 1);
+
+            if ($user->hasRole('kepala departemen') && $user->department_id) {
+                $masterDataQuery->where('department_id', $user->department_id);
+            }
+
+            $masterDataFailValue = (clone $masterDataQuery)->where('key', "{$stageName}|TIDAK LULUS")->value('value');
+
+            $masterDataCancelValue = (clone $masterDataQuery)->where('key', "{$stageName}|CANCEL")->value('value');
+
+            // Sum the logic count (a) + the master data value (b), defaulting to 0 if null
+            $failed = $failedLogic + (int) $masterDataFailValue;
+            $canceled = $canceledLogic + (int) $masterDataCancelValue;
+
+            // Recalculate totalReached so percentages map correctly to 100% after injecting master data
+            $totalReached = $passed + $failed + $canceled + $inProgress;
+
+            // Guard against division by zero errors
+            $pass_rate = $totalReached > 0 ? round(($passed / $totalReached) * 100, 1) : 0;
+            $tidak_lulus_pass_rate = $totalReached > 0 ? round(($failed / $totalReached) * 100, 1) : 0;
+            $dalam_proses_pass_rate = $totalReached > 0 ? round(($inProgress / $totalReached) * 100, 1) : 0;
+            $canceled_pass_rate = $totalReached > 0 ? round(($canceled / $totalReached) * 100, 1) : 0;
+
             $analysis[] = [
                 'name' => $stage['name'],
                 'total' => $totalReached,
@@ -535,13 +707,12 @@ class StatisticsController extends Controller
                 'pass_rate' => $pass_rate,
                 'tidak_lulus_pass_rate' => $tidak_lulus_pass_rate,
                 'dalam_proses_pass_rate' => $dalam_proses_pass_rate,
-                'canceled_pass_rate' => $canceled_pass_rate
+                'canceled_pass_rate' => $canceled_pass_rate,
             ];
         }
 
         return $analysis;
     }
-
     private function getTimelineAnalysisData($baseQuery)
     {
         $totalApplications = (clone $baseQuery)->count();
@@ -557,15 +728,16 @@ class StatisticsController extends Controller
             'Hired' => 'hiring',
         ];
 
-        $applications = (clone $baseQuery)->with([
-            'candidate:id,nama',
-            'stages' => function ($query) {
-                $query->select('id', 'application_id', 'stage_name', 'status', 'created_at', 'updated_at')
-                    ->whereNotNull('updated_at'); // Only consider completed stages
-            }
-        ])->get();
+        $applications = (clone $baseQuery)
+            ->with([
+                'candidate:id,nama',
+                'stages' => function ($query) {
+                    $query->select('id', 'application_id', 'stage_name', 'status', 'created_at', 'updated_at')->whereNotNull('updated_at'); // Only consider completed stages
+                },
+            ])
+            ->get();
 
-        \Log::info("Timeline Analysis - Applications loaded: " . $applications->count());
+        \Log::info('Timeline Analysis - Applications loaded: ' . $applications->count());
 
         $allDurations = [];
 
@@ -630,7 +802,7 @@ class StatisticsController extends Controller
             }
         }
 
-        \Log::info("Timeline Analysis - Final analysis count: " . count($analysis));
+        \Log::info('Timeline Analysis - Final analysis count: ' . count($analysis));
         return $analysis;
     }
 
@@ -639,20 +811,7 @@ class StatisticsController extends Controller
      */
     private function getUniversityPassRateData($query)
     {
-        $data = (clone $query)
-            ->join('candidates', 'applications.candidate_id', '=', 'candidates.id')
-            ->join('educations', 'candidates.id', '=', 'educations.candidate_id')
-            ->select(
-                'educations.institution',
-                DB::raw('COUNT(*) as total_candidates'),
-                DB::raw('SUM(CASE WHEN applications.overall_status = \'LULUS\' THEN 1 ELSE 0 END) as passed_count')
-            )
-            ->whereNotNull('educations.institution')
-            ->where('educations.institution', '!=', '')
-            ->groupBy('educations.institution')
-            ->orderByDesc('passed_count')
-            ->limit(15)
-            ->get();
+        $data = (clone $query)->join('candidates', 'applications.candidate_id', '=', 'candidates.id')->join('educations', 'candidates.id', '=', 'educations.candidate_id')->select('educations.institution', DB::raw('COUNT(*) as total_candidates'), DB::raw('SUM(CASE WHEN applications.overall_status = \'LULUS\' THEN 1 ELSE 0 END) as passed_count'))->whereNotNull('educations.institution')->where('educations.institution', '!=', '')->groupBy('educations.institution')->orderByDesc('passed_count')->limit(15)->get();
 
         // Transform untuk pie chart
         $transformedData = [];

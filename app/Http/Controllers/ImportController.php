@@ -10,7 +10,7 @@ use App\Services\CandidateService;
 use App\Models\Vacancy;
 use App\Models\ImportHistory;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;   
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -30,9 +30,9 @@ class ImportController extends Controller
     public function index()
     {
         $import_history = ImportHistory::where('user_id', auth()->id())
-                                   ->latest()
-                                   ->take(10)
-                                   ->get();
+            ->latest()
+            ->take(10)
+            ->get();
 
         return view('import.index', [
             'import_history' => $import_history,
@@ -86,7 +86,7 @@ class ImportController extends Controller
                 if (!empty($validationErrors)) {
                     $errors = array_merge($errors, $validationErrors);
                 }
-                
+
                 // Still collect up to 5 valid rows for the visual preview
                 if (count($previewData) < 5 && empty($validationErrors)) {
                     $previewData[] = $rowData;
@@ -124,7 +124,7 @@ class ImportController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => 'Terjadi kesalahan saat memproses file: ' . $e->getMessage()
             ], 500);
         }
@@ -134,13 +134,13 @@ class ImportController extends Controller
     {
         $request->validate(['file_id' => 'required|string']);
         $fileId = $request->input('file_id');
-        
+
         try {
             $cachedData = Cache::get($fileId);
 
             if (!$cachedData || !Storage::exists($cachedData['path'])) {
                 return response()->json([
-                    'success' => false, 
+                    'success' => false,
                     'message' => 'File tidak ditemukan atau sesi import telah kedaluwarsa.'
                 ], 404);
             }
@@ -173,7 +173,7 @@ class ImportController extends Controller
             ]);
 
             return response()->json([
-                'success' => true, 
+                'success' => true,
                 'message' => 'Proses import telah dimulai. Data akan diproses di latar belakang.'
             ]);
         } catch (\Throwable $e) {
@@ -188,7 +188,7 @@ class ImportController extends Controller
             }
 
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => 'Gagal memulai proses import: ' . $e->getMessage()
             ], 500);
         }
@@ -204,13 +204,13 @@ class ImportController extends Controller
             Storage::delete($cachedData['path']);
             Cache::forget($fileId);
             return response()->json([
-                'success' => true, 
+                'success' => true,
                 'message' => 'Import dibatalkan dan file sementara telah dihapus.'
             ]);
         }
 
         return response()->json([
-            'success' => false, 
+            'success' => false,
             'message' => 'Tidak ada proses import untuk dibatalkan.'
         ], 404);
     }
@@ -218,7 +218,7 @@ class ImportController extends Controller
     private function validateRow(array $row, int $rowIndex): array
     {
         $errors = [];
-        
+
         $mppYear = trim($row['tahun_mpp'] ?? '');
 
         // 1. Required fields check
@@ -228,7 +228,7 @@ class ImportController extends Controller
                 $errors[] = "Baris {$rowIndex}: Kolom '{$field}' tidak boleh kosong.";
             }
         }
-        
+
         // If a vacancy is present, a year must also be present
         if (!empty($row['jabatan_dilamar']) && empty($mppYear)) {
             $errors[] = "Baris {$rowIndex}: Kolom 'Tahun MPP' wajib diisi jika 'Jabatan Dilamar' diisi.";
@@ -238,19 +238,19 @@ class ImportController extends Controller
         if (!empty($row['alamat_email']) && !filter_var($row['alamat_email'], FILTER_VALIDATE_EMAIL)) {
             $errors[] = "Baris {$rowIndex}: Format email '{$row['alamat_email']}' tidak valid.";
         }
-        
+
         // 3. Date format check
         $birthDateValue = $row['tanggal_lahir'] ?? $row['tanggal lahir'] ?? null;
         if (!empty($birthDateValue) && !$this->parseDate($birthDateValue)) {
             $errors[] = "Baris {$rowIndex}: Format tanggal lahir tidak valid.";
         }
-        
+
         // 4. Vacancy check - Must exist in an approved MPP for the selected year
         if (!empty($row['jabatan_dilamar']) && !empty($mppYear)) {
             if (!is_numeric($mppYear) || strlen($mppYear) != 4) {
-                 $errors[] = "Baris {$rowIndex}: Format 'Tahun MPP' ('{$mppYear}') tidak valid. Gunakan 4 digit angka (contoh: 2024).";
+                $errors[] = "Baris {$rowIndex}: Format 'Tahun MPP' ('{$mppYear}') tidak valid. Gunakan 4 digit angka (contoh: 2024).";
             } else {
-                $vacancyId = $this->getVacancyId($row['jabatan_dilamar'], (int)$mppYear);
+                $vacancyId = $this->getVacancyId($row['jabatan_dilamar'], (int) $mppYear);
                 if (!$vacancyId) {
                     $errors[] = "Baris {$rowIndex}: Jabatan/Posisi '{$row['jabatan_dilamar']}' tidak ditemukan di MPP yang disetujui untuk tahun {$mppYear}.";
                 }
@@ -349,7 +349,7 @@ class ImportController extends Controller
             return null;
         }
     }
-    
+
     private function getVacancyId(string $vacancyName, int $year): ?int
     {
         Log::debug('getVacancyId: Attempting to find vacancy', [
@@ -364,13 +364,14 @@ class ImportController extends Controller
         $vacancy = Vacancy::whereRaw('LOWER(name) = ?', [$normalizedVacancyName])
             ->whereHas('mppSubmissions', function ($q) use ($year) {
                 $q->where('year', $year)
-                  ->whereIn('status', [
-                      \App\Models\MPPSubmission::STATUS_APPROVED,
-                      \App\Models\MPPSubmission::STATUS_SUBMITTED
-                  ])
-                  ->where('mpp_submission_vacancy.proposal_status', 'approved');
+                    ->whereIn('submission_type', ['planned', 'unplanned'])
+                    ->whereIn('status', [
+                        \App\Models\MPPSubmission::STATUS_APPROVED,
+                        \App\Models\MPPSubmission::STATUS_SUBMITTED
+                    ])
+                    ->where('mpp_submission_vacancy.proposal_status', 'approved');
             });
-        
+
         Log::debug('getVacancyId: Vacancy query build', ['sql' => $vacancy->toSql(), 'bindings' => $vacancy->getBindings()]);
 
         $foundVacancy = $vacancy->first();

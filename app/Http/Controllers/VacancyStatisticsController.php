@@ -12,24 +12,9 @@ class VacancyStatisticsController extends Controller
         // --- Year & Filter Preparation ---
 
         // Prepare years for filter dropdown by combining years from MPP submissions and applications
-        $mppYears = \App\Models\MPPSubmission::select('year')->distinct()->pluck('year');
-        $applicationYears = \App\Models\Application::select('mpp_year')->distinct()->pluck('mpp_year');
-        
-        $years = $mppYears->merge($applicationYears)
-                         ->unique()
-                         ->filter() // Ensure no null values
-                         ->sortDesc()
-                         ->values();
-
-        // Ensure current year is always an option
+        $years = \App\Services\YearProvider::availableYears();
         $currentYear = date('Y');
-        if (!$years->contains($currentYear)) {
-            $years->prepend($currentYear);
-            $years = $years->sortDesc()->values();
-        }
-        
-        // Default to the latest year with data, or the current year if none available
-        $selectedYear = $request->input('year', $years->first() ?? $currentYear);
+        $selectedYear = $request->input('year', $years[0] ?? $currentYear);
 
         $vacancies = Vacancy::with(['applications.stages', 'mppSubmissions'])->get();
 

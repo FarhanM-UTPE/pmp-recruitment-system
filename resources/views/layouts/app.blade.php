@@ -28,15 +28,36 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     
+    <!-- Prevent sidebar flashing on page load -->
+    <script>
+        if (window.innerWidth >= 1024 && localStorage.getItem('sidebarState') === 'collapsed') {
+            document.documentElement.classList.add('sidebar-collapsed-preload');
+        }
+    </script>
+    
     <style>
         [x-cloak] { display: none !important; }
         body {
             font-family: 'Inter', sans-serif;
         }
+        
+        /* Apply collapsed state immediately on page load to prevent flashing */
+        html.sidebar-collapsed-preload body {
+            --apply-sidebar-collapsed: 1;
+        }
 
         /* Ensure content follows sidebar */
         html, body {
             overflow-x: hidden;
+        }
+        
+        /* Hide scrollbar on sidebar nav */
+        #sidebar nav {
+            scrollbar-width: none;
+        }
+        
+        #sidebar nav::-webkit-scrollbar {
+            display: none;
         }
 
         /* Sidebar Styling */
@@ -47,6 +68,36 @@
 
         /* Desktop sidebar - Fixed positioning */
         @media (min-width: 1024px) {
+            /* Apply collapsed state immediately on preload */
+            html.sidebar-collapsed-preload #sidebar {
+                width: 5rem;
+                min-width: 5rem;
+                max-width: 5rem;
+            }
+            
+            html.sidebar-collapsed-preload .sidebar-text {
+                display: none;
+            }
+            
+            /* Icon color when inactive in collapsed preload */
+            html.sidebar-collapsed-preload #sidebar nav a:not(.bg-gradient-to-r) i,
+            html.sidebar-collapsed-preload #sidebar button:not(.bg-gradient-to-r) i {
+                color: rgba(0, 165, 173) !important;
+            }
+            
+            html.sidebar-collapsed-preload .user-info-container {
+                display: none;
+            }
+            
+            html.sidebar-collapsed-preload #sidebarPattern {
+                display: block !important;
+            }
+            
+            html.sidebar-collapsed-preload #main-content {
+                margin-left: 5rem;
+                width: calc(100% - 5rem);
+            }
+            
             #sidebar {
                 position: fixed;
                 top: 0;
@@ -58,12 +109,108 @@
                 overflow-y: auto;
                 overflow-x: hidden;
                 z-index: 30;
-                transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+                transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
             }
             
-            /* Collapsed state */
+            /* Collapsed state - show mini sidebar with icons only */
             body.sidebar-collapsed #sidebar {
-                transform: translateX(-100%);
+                width: 5rem;
+                min-width: 5rem;
+                max-width: 5rem;
+            }
+            
+            /* Hide text when sidebar is collapsed */
+            body.sidebar-collapsed .sidebar-text {
+                display: none;
+            }
+            
+            /* Icon color when inactive in collapsed state */
+            body.sidebar-collapsed #sidebar nav a:not(.bg-gradient-to-r) i,
+            body.sidebar-collapsed #sidebar button:not(.bg-gradient-to-r) i {
+                color: rgba(0, 165, 173) !important;
+            }
+            
+            /* Hide user info, show pattern when collapsed */
+            body.sidebar-collapsed .user-info-container {
+                display: none;
+            }
+            
+            body.sidebar-collapsed #sidebarPattern {
+                display: block !important;
+            }
+            
+            /* Adjust nav items for icon-only layout */
+            body.sidebar-collapsed #sidebar nav a,
+            body.sidebar-collapsed #sidebar nav div > div > a {
+                justify-content: center;
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+            
+            /* Apply nav centering for preload */
+            html.sidebar-collapsed-preload #sidebar nav a,
+            html.sidebar-collapsed-preload #sidebar nav div > div > a {
+                justify-content: center;
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+            
+            /* Hide logo text, show icon only */
+            body.sidebar-collapsed #sidebar > div:first-child {
+                padding-right: 0.5rem;
+                padding-left: 0.5rem;
+            }
+            
+            /* Logo visibility toggle */
+            body.sidebar-collapsed #logoFull {
+                display: none;
+            }
+            
+            body.sidebar-collapsed #logoIcon {
+                display: block !important;
+            }
+            
+            /* Logo visibility for preload */
+            html.sidebar-collapsed-preload #logoFull {
+                display: none;
+            }
+            
+            html.sidebar-collapsed-preload #logoIcon {
+                display: block !important;
+            }
+            
+            /* Adjust user info container */
+            body.sidebar-collapsed .user-info-container {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            body.sidebar-collapsed .user-info-container .sidebar-text {
+                display: none;
+            }
+            
+            /* Preload user info container */
+            html.sidebar-collapsed-preload .user-info-container {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            html.sidebar-collapsed-preload .user-info-container .sidebar-text {
+                display: none;
+            }
+            
+            /* Adjust logout button for mini sidebar */
+            body.sidebar-collapsed #sidebar button[type="submit"] {
+                justify-content: center;
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+            
+            /* Preload logout button */
+            html.sidebar-collapsed-preload #sidebar button[type="submit"] {
+                justify-content: center;
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
             }
             
             #main-content {
@@ -74,10 +221,11 @@
             }
             
             body.sidebar-collapsed #main-content {
-                margin-left: 0;
-                width: 100%;
+                margin-left: 5rem;
+                width: calc(100% - 5rem);
             }
         }
+
 
         /* Mobile sidebar */
         @media (max-width: 1023px) {
@@ -106,20 +254,12 @@
 
         /* Custom scrollbar untuk sidebar */
         #sidebar::-webkit-scrollbar {
-            width: 6px;
+            display: none;
         }
 
-        #sidebar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        #sidebar::-webkit-scrollbar-thumb {
-            background: rgba(156, 163, 175, 0.5);
-            border-radius: 3px;
-        }
-
-        #sidebar::-webkit-scrollbar-thumb:hover {
-            background: rgba(107, 114, 128, 0.7);
+        /* Firefox scrollbar hide */
+        #sidebar {
+            scrollbar-width: none;
         }
     </style>
     @stack('styles')
@@ -185,7 +325,9 @@
 
         // On page load, check sidebar state from localStorage
         document.addEventListener('DOMContentLoaded', function() {
-            if (window.innerWidth >= 1024 && localStorage.getItem('sidebarState') === 'collapsed') {
+            // Transfer preload state to body class
+            if (document.documentElement.classList.contains('sidebar-collapsed-preload')) {
+                document.documentElement.classList.remove('sidebar-collapsed-preload');
                 document.body.classList.add('sidebar-collapsed');
             }
         });

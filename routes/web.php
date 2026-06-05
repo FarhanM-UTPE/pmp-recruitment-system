@@ -12,6 +12,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\PositionApplicantController;
 use App\Http\Controllers\VacancyManagementController;
 use App\Http\Controllers\VacancyProposalController;
@@ -202,6 +203,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/documents', [DocumentController::class, 'store'])->name('documents.store');
     });
 
+    Route::get('/masterdata', [MasterDataController::class, 'index'])
+        ->middleware('can:manage-master-data')
+        ->name('masterdata.index');
+
+    Route::post('/masterdata', [MasterDataController::class, 'store'])
+        ->middleware('can:manage-master-data')
+        ->name('masterdata.store');
+
+    Route::put('/masterdata/{masterData}', [MasterDataController::class, 'update'])
+        ->middleware('can:manage-master-data')
+        ->name('masterdata.update');
+
+    Route::delete('/masterdata/{masterData}', [MasterDataController::class, 'destroy'])
+        ->middleware('can:manage-master-data')
+        ->name('masterdata.destroy');
+
     // Debug route for testing permissions
     Route::get('/check-auth', function () {
         $user = Auth::user();
@@ -218,6 +235,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'can_import_excel' => $user->can('import-excel'),
             'can_manage_users' => $user->can('manage-users'),
             'can_manage_documents' => $user->can('manage-documents'),
+            'can_manage_master_data' => $user->can('manage-master-data'),
             'can_manage_departments' => $user->can('manage-departments'),
             'can_view_posisi_pelamar' => $user->can('view-posisi-pelamar'),
             'can_manage_vacancies' => $user->can('manage-vacancies'),
