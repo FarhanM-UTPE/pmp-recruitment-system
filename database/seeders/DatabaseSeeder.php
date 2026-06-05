@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             DepartmentUsersSeeder::class,
             VacancySeeder::class,
             MPPPermissionSeeder::class,  // MPP permissions & role assignments
+            MasterDataSeeder::class,
         ]);
 
         // Register permissions with the Gate facade
