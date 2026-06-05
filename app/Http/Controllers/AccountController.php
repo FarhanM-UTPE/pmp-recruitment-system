@@ -47,6 +47,7 @@ class AccountController extends Controller
         $validationRules = [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
+            'nrp' => ['nullable', 'string', 'max:50', Rule::unique('users', 'nrp')],
             'password' => 'required|string|min:8|confirmed',
             'role' => 'required|exists:roles,name',
             'status' => 'required|boolean',
@@ -55,6 +56,7 @@ class AccountController extends Controller
         // Hanya tambahkan validasi department jika role adalah kepala departemen
         if ($request->role === 'kepala departemen') {
             $validationRules['department_id'] = 'required|exists:departments,id';
+            $validationRules['nrp'][0] = 'required';
         }
 
         $request->validate($validationRules);
@@ -63,6 +65,7 @@ class AccountController extends Controller
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
+            'nrp' => $request->filled('nrp') ? trim((string) $request->nrp) : null,
             'password' => Hash::make($request->password),
             'department_id' => $request->role === 'kepala departemen' ? $request->department_id : null,
             'status' => (bool) $request->status,
@@ -94,6 +97,7 @@ class AccountController extends Controller
         $validationRules = [
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($account->id)],
+            'nrp' => ['nullable', 'string', 'max:50', Rule::unique('users', 'nrp')->ignore($account->id)],
             'password' => 'nullable|string|min:8|confirmed',
             'role' => 'required|exists:roles,name',
             'status' => 'required|boolean',
@@ -102,6 +106,7 @@ class AccountController extends Controller
         // Hanya tambahkan validasi department jika role adalah kepala departemen
         if ($request->role === 'kepala departemen') {
             $validationRules['department_id'] = 'required|exists:departments,id';
+            $validationRules['nrp'][0] = 'required';
         }
 
         $request->validate($validationRules);
@@ -109,6 +114,7 @@ class AccountController extends Controller
         $updateData = [
             'name' => $request->name,
             'email' => $request->email,
+            'nrp' => $request->filled('nrp') ? trim((string) $request->nrp) : null,
             'department_id' => $request->role === 'kepala departemen' ? $request->department_id : null,
             'status' => (bool) $request->status,
         ];
