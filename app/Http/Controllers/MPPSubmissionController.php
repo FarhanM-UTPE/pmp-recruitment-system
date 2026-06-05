@@ -47,8 +47,8 @@ class MPPSubmissionController extends Controller
 
         $mppSubmissions = $query->orderBy('created_at', 'desc')->paginate(15);
 
-        // Get distinct years for the filter dropdown
-        $years = MPPSubmission::select('year')->distinct()->orderBy('year', 'desc')->pluck('year');
+        // Get distinct years for the filter dropdown (single source of truth)
+        $years = \App\Services\YearProvider::availableYears();
 
         return view('mpp-submissions.index', [
             'mppSubmissions' => $mppSubmissions,
@@ -100,7 +100,7 @@ class MPPSubmissionController extends Controller
     /**
      * Store a newly created MPP submission
      */
-    public function store(Request $request)
+    public function storeOld(Request $request)
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
@@ -140,6 +140,81 @@ class MPPSubmissionController extends Controller
                 'created_by_user_id' => $user->id,
                 'department_id' => $validated['department_id'],
                 'year' => $validated['year'],
+                'status' => MPPSubmission::STATUS_SUBMITTED,
+                'submitted_at' => now(),
+            ]);
+
+            $mppSubmission->approvalHistories()->create([
+                'user_id' => $user->id,
+                'action' => 'created_and_submitted',
+            ]);
+
+            $vacanciesToAttach = [];
+            foreach ($validated['positions'] as $position) {
+                $vacanciesToAttach[$position['vacancy_id']] = [
+                    'vacancy_status' => $position['vacancy_status'],
+                    'needed_count' => $position['needed_count'],
+                    'proposal_status' => 'pending',
+                    'proposed_by_user_id' => $user->id,
+                ];
+            }
+
+            $mppSubmission->vacancies()->attach($vacanciesToAttach);
+        });
+
+        return redirect()->route('mpp-submissions.index')
+            ->with('success', 'MPP submission created successfully');
+    }
+
+    /**
+     * Store a newly created MPP submission
+     */
+    public function store(Request $request)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        if (!$user->can('create-mpp-submission')) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'department_id' => 'required|exists:departments,id',
+            'year' => 'required|integer|min:2000|max:2100',
+            'submission_type' => 'required|in:planned,unplanned', // ADD THIS VALIDATION
+            'positions' => 'required|array|min:1',
+            'positions.*.vacancy_id' => 'required|exists:vacancies,id',
+            'positions.*.vacancy_status' => 'required|in:OSPKWT,OS',
+            'positions.*.needed_count' => 'required|integer|min:1',
+        ]);
+
+        // Custom validation: prevent duplicate vacancy in the same year and submission type
+        foreach ($validated['positions'] as $position) {
+            $existing = DB::table('mpp_submission_vacancy')
+                ->join('mpp_submissions', 'mpp_submission_vacancy.m_p_p_submission_id', '=', 'mpp_submissions.id')
+                ->where('mpp_submission_vacancy.vacancy_id', $position['vacancy_id'])
+                ->where('mpp_submissions.year', $validated['year'])
+                ->where('mpp_submissions.submission_type', $validated['submission_type'])
+                ->whereNull('mpp_submissions.deleted_at')
+                ->whereIn('mpp_submissions.status', [MPPSubmission::STATUS_SUBMITTED, MPPSubmission::STATUS_APPROVED])
+                ->exists();
+
+            if ($existing) {
+                $vacancy = Vacancy::find($position['vacancy_id']);
+                $submissionTypeLabel = $validated['submission_type'] === 'planned' ? 'Terencana' : 'Di Luar MPP';
+
+                return back()->withErrors([
+                    'positions' => 'Posisi "' . $vacancy->name . '" sudah ada di pengajuan ' . strtolower($submissionTypeLabel) . ' untuk tahun ' . $validated['year'] . '.'
+                ])->withInput();
+            }
+        }
+
+        DB::transaction(function () use ($validated, $user) {
+            $mppSubmission = MPPSubmission::create([
+                'created_by_user_id' => $user->id,
+                'department_id' => $validated['department_id'],
+                'year' => $validated['year'],
+                'submission_type' => $validated['submission_type'], // Store the type
                 'status' => MPPSubmission::STATUS_SUBMITTED,
                 'submitted_at' => now(),
             ]);
@@ -289,7 +364,7 @@ class MPPSubmissionController extends Controller
         if ($pendingCount === 0) {
             // All vacancies have been processed
             $approvedCount = $vacancies->where('pivot.proposal_status', 'approved')->count();
-            
+
             if ($approvedCount > 0) {
                 $mppSubmission->update([
                     'status' => MPPSubmission::STATUS_APPROVED,
@@ -303,12 +378,12 @@ class MPPSubmissionController extends Controller
                 ]);
             }
         } else {
-             // If there are still pending vacancies, ensure status is submitted (in case it was somehow changed)
-             if ($mppSubmission->status !== MPPSubmission::STATUS_SUBMITTED) {
-                 $mppSubmission->update([
-                     'status' => MPPSubmission::STATUS_SUBMITTED,
-                 ]);
-             }
+            // If there are still pending vacancies, ensure status is submitted (in case it was somehow changed)
+            if ($mppSubmission->status !== MPPSubmission::STATUS_SUBMITTED) {
+                $mppSubmission->update([
+                    'status' => MPPSubmission::STATUS_SUBMITTED,
+                ]);
+            }
         }
     }
 
@@ -322,6 +397,20 @@ class MPPSubmissionController extends Controller
 
         if (!$user->can('delete-mpp-submission')) {
             abort(403);
+        }
+
+        $vacancyIds = $mppSubmission->vacancies()->pluck('vacancies.id');
+
+        if ($vacancyIds->isNotEmpty()) {
+            $relatedApplicationsCount = DB::table('applications')
+                ->whereIn('vacancy_id', $vacancyIds)
+                ->where('mpp_year', $mppSubmission->year)
+                ->count();
+
+            if ($relatedApplicationsCount > 0) {
+                return redirect()->route('mpp-submissions.index')
+                    ->with('error', 'MPP submission tidak dapat dihapus karena sudah memiliki kandidat.');
+            }
         }
 
         // Detach all vacancies from the submission
