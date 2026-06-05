@@ -2,12 +2,15 @@
     transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform shadow-lg lg:shadow-none
     w-64 -translate-x-full lg:translate-x-0
     lg:sidebar-collapsed:w-0 lg:sidebar-collapsed:translate-x-0">
+    
     <div class="p-6 flex justify-center border-b border-gray-100 bg-gradient-to-b from-blue-50 to-white">
-        <div class="w-full max-w-[100px] transition-all duration-300">
-            <img src="{{ asset('images/Logo Patria.png') }}" alt="Logo Patria" class="w-28 h-auto object-contain">
-        </div>
+        <!-- Full Logo -->
+        <img id="logoFull" src="{{ asset('images/Logo Patria.png') }}" alt="Logo Patria" class="w-28 h-auto object-contain sidebar-text">
+        <!-- Icon Only Logo (hidden by default, shown when collapsed) -->
+        <img id="logoIcon" src="{{ asset('images/LOGO ONLY.png') }}" alt="Logo" class="w-10 h-auto object-contain hidden lg:hidden sidebar-text">
     </div>
 
+    <!-- Component 1 -->
     <nav class="flex-1 px-4 py-6 overflow-y-auto">
         <div class="space-y-2">
             <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group {{ request()->routeIs('dashboard') ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }} active:scale-95">
@@ -77,10 +80,25 @@
                 <span class="font-medium sidebar-text">Dokumen</span>
             </a>
             @endcan
+
+            @can('manage-master-data')
+            <a href="{{ route('masterdata.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group {{ request()->routeIs('masterdata.*') ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }} active:scale-95">
+                <i class="fas fa-table text-sm w-4 {{ request()->routeIs('masterdata.*') ? 'text-white' : 'group-hover:text-gray-600' }}"></i>
+                <span class="font-medium sidebar-text">Master Data</span>
+            </a>
+            @endcan
         </div>
     </nav>
 
-    <div class="border-t border-gray-100 p-4 bg-gray-50">
+    <!-- NEW: Image moved here to sit between the Nav and Bottom Component -->
+    <!-- Added border-t and bg-gray-50 here so it merges nicely with the bottom section -->
+    <!-- <div id="sidebarPattern" class="w-full px-2 py-2 pt-4 border-t border-gray-100 bg-gray-50">
+        <img src="{{ asset('images/PMP-PATTERN-01.png') }}" alt="Pattern" class="w-full h-auto block object-cover">
+    </div> -->
+
+    <!-- Component 2 (Removed border-t to avoid double borders) -->
+    <div class="p-4 bg-gray-50">
+        <!-- User Info (hidden when collapsed) -->
         <div class="flex items-center gap-3 mb-4 px-3 py-3 bg-white rounded-xl shadow-sm user-info-container">
             <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                 <span class="text-sm font-semibold text-white">{{ substr(Auth::user()->name, 0, 2) }}</span>
@@ -90,7 +108,7 @@
                 <p class="text-xs text-gray-500 truncate">{{ Auth::user()->roles->first()->name ?? 'User' }}</p>
             </div>
         </div>
-        
+
         <button type="submit" form="logout-form" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-200 w-full group active:scale-95">
             <i class="fas fa-sign-out-alt text-sm w-4 group-hover:text-red-600"></i>
             <span class="font-medium sidebar-text">Logout</span>
