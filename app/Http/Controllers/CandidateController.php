@@ -29,7 +29,7 @@ class CandidateController extends Controller
     public function updateStage(Request $request, Application $application, ApplicationStageService $stageService): JsonResponse
     {
         $updateDateOnly = $request->input('update_date_only', false);
-        
+
         $rules = [
             'stage' => 'required|string',
             'notes' => 'nullable|string',
@@ -38,7 +38,7 @@ class CandidateController extends Controller
             'update_date_only' => 'nullable|boolean',
             'result' => $updateDateOnly ? 'nullable|string' : 'required|string',
         ];
-        
+
         $validated = $request->validate($rules);
 
         try {
@@ -108,7 +108,7 @@ class CandidateController extends Controller
             $candidate = $application->candidate;
             if ($application->vacancy) {
                 $candidate->department_id = $application->vacancy->department_id;
-                
+
                 $mpp = $application->vacancy->mppSubmissions()
                     ->where('year', $application->mpp_year)
                     ->where('proposal_status', 'approved')
@@ -127,7 +127,7 @@ class CandidateController extends Controller
             return response()->json(['message' => 'Gagal membatalkan perpindahan: ' . $e->getMessage()], 500);
         }
     }
-    
+
     /**
      * Show the form for creating a new candidate
      */
@@ -137,7 +137,7 @@ class CandidateController extends Controller
     //         $q->where('proposal_status', 'approved');
     //     })->orderBy('name')->get();
     //     $departments = Department::orderBy('name')->get();
-        
+
     //     $today = now()->format('ymd');
     //     $todayCount = Candidate::whereDate('created_at', today())->count();
     //     $nextId = str_pad($todayCount + 1, 3, '0', STR_PAD_LEFT);
@@ -152,15 +152,17 @@ class CandidateController extends Controller
         $vacancies = Vacancy::whereHas('mppSubmissions', function ($q) {
             $q->where('proposal_status', 'approved');
         })
-        ->with(['mppSubmissions' => function ($q) {
-            // Ensure we only load the approved ones into the JSON array
-            $q->where('proposal_status', 'approved');
-        }])
-        ->orderBy('name')
-        ->get();
-        
+            ->with([
+                'mppSubmissions' => function ($q) {
+                    // Ensure we only load the approved ones into the JSON array
+                    $q->where('proposal_status', 'approved');
+                }
+            ])
+            ->orderBy('name')
+            ->get();
+
         $departments = Department::orderBy('name')->get();
-        
+
         $today = now()->format('ymd');
         $todayCount = Candidate::whereDate('created_at', today())->count();
         $nextId = str_pad($todayCount + 1, 3, '0', STR_PAD_LEFT);
@@ -198,13 +200,13 @@ class CandidateController extends Controller
                     ->where('year', $validated['mpp_year'])
                     ->where('proposal_status', 'approved')
                     ->first();
-                
+
                 if ($mppSubmission) {
                     $vacancyStatus = $mppSubmission->pivot->vacancy_status;
                     $airsysInternal = ($vacancyStatus === 'OSPKWT') ? 'Yes' : (($vacancyStatus === 'OS') ? 'No' : null);
                 }
             }
-            
+
             $data = [
                 'nama' => $validated['nama'],
                 'alamat_email' => $validated['alamat_email'],
@@ -237,6 +239,7 @@ class CandidateController extends Controller
             Application::create([
                 'candidate_id' => $candidate->id,
                 'vacancy_id' => $vacancy->id,
+                'department_id' => $vacancy->department_id,
                 'mpp_year' => $validated['mpp_year'] ?? null,
                 'overall_status' => 'PROSES',
             ]);
@@ -357,7 +360,7 @@ class CandidateController extends Controller
         $candidate->delete();
         return redirect()->route('candidates.index')->with('success', 'Candidate deleted successfully.');
     }
-    
+
     /**
      * ======================================
      * CANDIDATE LIST & PIPELINE FUNNEL DATA
@@ -368,22 +371,15 @@ class CandidateController extends Controller
         $type = $request->input('type');
         $user = Auth::user();
 
+        $hasFilters = $request->anyFilled(['year', 'vacancy_id', 'type', 'search', 'department_id', 'source', 'status', 'stage']) || $request->boolean('not_moved');
+
         // 1. Prepare Filter Options
-        $mppYears = MPPSubmission::select('year')->distinct()->pluck('year');
-        $applicationYears = Application::select('mpp_year')->distinct()->pluck('mpp_year');
-        
-        $years = $mppYears->merge($applicationYears)->unique()->filter()->sortDesc()->values();
-        $currentYear = date('Y');
-        if (!$years->contains($currentYear)) {
-            $years->prepend($currentYear);
-            $years = $years->sortDesc()->values();
-        }
-        
+        $years = \App\Services\YearProvider::availableYears();
         $selectedYear = $request->input('year');
 
         // 2. Base Query Formulation
         $query = Application::query()
-            ->select('applications.*') 
+            ->select('applications.*')
             ->join('candidates', 'applications.candidate_id', '=', 'candidates.id')
             ->join('vacancies', 'applications.vacancy_id', '=', 'vacancies.id')
             ->with([
@@ -430,54 +426,61 @@ class CandidateController extends Controller
             if ($request->type === 'duplicate') {
                 $query->whereIn('applications.candidate_id', $duplicateCandidateIds);
                 $statsQuery->whereIn('applications.candidate_id', $duplicateCandidateIds);
-            } elseif ($request->type === 'non-duplicate'){
+            } elseif ($request->type === 'non-duplicate') {
                 $query->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
                 $statsQuery->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
             } elseif ($request->type === 'organic') {
-                $query->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'Yes'); });
-                $statsQuery->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'Yes'); });
+                $query->whereHas('candidate', function ($q) {
+                    $q->where('airsys_internal', 'Yes');
+                });
+                $statsQuery->whereHas('candidate', function ($q) {
+                    $q->where('airsys_internal', 'Yes');
+                });
             } elseif ($request->type === 'non-organic') {
-                $query->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'No'); });
-                $statsQuery->whereHas('candidate', function ($q) { $q->where('airsys_internal', 'No'); });
-            }
-              elseif ($request->type === 'non-duplicate') {
-               $query->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
-               $statsQuery->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
+                $query->whereHas('candidate', function ($q) {
+                    $q->where('airsys_internal', 'No');
+                });
+                $statsQuery->whereHas('candidate', function ($q) {
+                    $q->where('airsys_internal', 'No');
+                });
+            } elseif ($request->type === 'non-duplicate') {
+                $query->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
+                $statsQuery->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
             }
         }
 
         if ($request->boolean('not_moved')) {
             $query->whereNotExists(function ($q) {
                 $q->select(DB::raw(1))
-                  ->from('applications as sub_app')
-                  ->whereRaw('sub_app.candidate_id = applications.candidate_id')
-                  ->where('sub_app.overall_status', 'PINDAH');
+                    ->from('applications as sub_app')
+                    ->whereRaw('sub_app.candidate_id = applications.candidate_id')
+                    ->where('sub_app.overall_status', 'PINDAH');
             });
             $statsQuery->whereNotExists(function ($q) {
                 $q->select(DB::raw(1))
-                  ->from('applications as sub_app')
-                  ->whereRaw('sub_app.candidate_id = applications.candidate_id')
-                  ->where('sub_app.overall_status', 'PINDAH');
+                    ->from('applications as sub_app')
+                    ->whereRaw('sub_app.candidate_id = applications.candidate_id')
+                    ->where('sub_app.overall_status', 'PINDAH');
             });
         }
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $filterSearch = function($q) use ($search) {
+            $filterSearch = function ($q) use ($search) {
                 $q->where('candidates.nama', 'like', "%{$search}%")
-                  ->orWhere('candidates.applicant_id', 'like', "%{$search}%")
-                  ->orWhere('candidates.alamat_email', 'like', "%{$search}%");
+                    ->orWhere('candidates.applicant_id', 'like', "%{$search}%")
+                    ->orWhere('candidates.alamat_email', 'like', "%{$search}%");
             };
             $query->where($filterSearch);
             $statsQuery->where($filterSearch);
         }
-        
-        if ($request->filled('department_id')) { 
+
+        if ($request->filled('department_id')) {
             $query->where('candidates.department_id', $request->department_id);
             $statsQuery->where('candidates.department_id', $request->department_id);
         }
-        
-        if ($request->filled('source')) { 
+
+        if ($request->filled('source')) {
             $query->where('candidates.source', $request->source);
             $statsQuery->where('candidates.source', $request->source);
         }
@@ -494,7 +497,7 @@ class CandidateController extends Controller
         //     $query->where('applications.overall_status', $overallStatus);
         //     $statsQuery->where('applications.overall_status', $overallStatus);
         // }
-        
+
         // ==========================================
         // DYNAMIC STATUS & STAGE FILTERING (SYNCED WITH CARDS)
         // ==========================================
@@ -503,13 +506,13 @@ class CandidateController extends Controller
             $reqStatus = strtoupper($request->status ?? '');
 
             $stageOrder = [
-                'psikotes'        => 1,
-                'hc_interview'    => 2,
-                'user_interview'  => 3,
-                'interview_bod'   => 4,
+                'psikotes' => 1,
+                'hc_interview' => 2,
+                'user_interview' => 3,
+                'interview_bod' => 4,
                 'offering_letter' => 5,
-                'mcu'             => 6,
-                'hiring'          => 7,
+                'mcu' => 6,
+                'hiring' => 7,
             ];
             $targetWeight = $stageOrder[$stage] ?? 0;
 
@@ -523,8 +526,8 @@ class CandidateController extends Controller
                 if (in_array($reqStatus, ['HIRED', 'LULUS'])) {
                     // LULUS: Jika kandidat sudah mencapai stage yang lebih tinggi, ATAU punya status LULUS di stage ini
                     $higherStages = array_keys(array_filter($stageOrder, fn($w) => $w > $targetWeight));
-                    
-                    $query->where(function($q) use ($higherStages, $stage) {
+
+                    $query->where(function ($q) use ($higherStages, $stage) {
                         if (!empty($higherStages)) {
                             $q->whereHas('stages', fn($sq) => $sq->whereIn('stage_name', $higherStages));
                         }
@@ -534,40 +537,40 @@ class CandidateController extends Controller
                 } elseif ($reqStatus === 'ON_PROCESS') {
                     // PROSES: Mentok di stage ini (Max ID), status tidak final, dan tidak dicancel
                     $query->whereNotIn('applications.overall_status', ['CANCEL', 'PINDAH'])
-                          ->whereHas('stages', function($q) use ($stage) {
-                              $q->where('stage_name', $stage)
+                        ->whereHas('stages', function ($q) use ($stage) {
+                            $q->where('stage_name', $stage)
                                 ->whereNotIn('status', ['LULUS', 'HIRED', 'TIDAK LULUS', 'DITOLAK', 'FAILED', 'CANCEL'])
-                                ->where('id', function($sub) {
+                                ->where('id', function ($sub) {
                                     $sub->select(DB::raw('max(id)'))->from('application_stages')->whereColumn('application_id', 'applications.id');
                                 });
-                          });
+                        });
 
                 } elseif ($reqStatus === 'FAILED') {
                     // GAGAL: Mentok di stage ini dengan status Gagal
-                    $query->whereHas('stages', function($q) use ($stage) {
-                              $q->where('stage_name', $stage)
-                                ->whereIn('status', ['TIDAK LULUS', 'DITOLAK', 'FAILED'])
-                                ->where('id', function($sub) {
-                                    $sub->select(DB::raw('max(id)'))->from('application_stages')->whereColumn('application_id', 'applications.id');
-                                });
-                          });
+                    $query->whereHas('stages', function ($q) use ($stage) {
+                        $q->where('stage_name', $stage)
+                            ->whereIn('status', ['TIDAK LULUS', 'DITOLAK', 'FAILED'])
+                            ->where('id', function ($sub) {
+                                $sub->select(DB::raw('max(id)'))->from('application_stages')->whereColumn('application_id', 'applications.id');
+                            });
+                    });
 
                 } elseif ($reqStatus === 'CANCEL') {
                     // CANCEL: Mentok di stage ini karena status stage CANCEL, atau aplikasi dipindah
-                    $query->whereHas('stages', function($q) use ($stage) {
+                    $query->whereHas('stages', function ($q) use ($stage) {
                         $q->where('stage_name', $stage)
-                          ->where('id', function($sub) {
-                              $sub->select(DB::raw('max(id)'))->from('application_stages')->whereColumn('application_id', 'applications.id');
-                          })
-                          ->where(function($subQ) {
-                              $subQ->where('status', 'CANCEL')
-                                   ->orWhereExists(function($ex) {
-                                       $ex->select(DB::raw(1))
-                                          ->from('applications as a')
-                                          ->whereColumn('a.id', 'application_stages.application_id')
-                                          ->whereIn('a.overall_status', ['CANCEL', 'PINDAH']);
-                                   });
-                          });
+                            ->where('id', function ($sub) {
+                                $sub->select(DB::raw('max(id)'))->from('application_stages')->whereColumn('application_id', 'applications.id');
+                            })
+                            ->where(function ($subQ) {
+                                $subQ->where('status', 'CANCEL')
+                                    ->orWhereExists(function ($ex) {
+                                        $ex->select(DB::raw(1))
+                                            ->from('applications as a')
+                                            ->whereColumn('a.id', 'application_stages.application_id')
+                                            ->whereIn('a.overall_status', ['CANCEL', 'PINDAH']);
+                                    });
+                            });
                     });
                 }
             }
@@ -593,7 +596,7 @@ class CandidateController extends Controller
             // }
             if ($request->filled('status')) {
                 $status = strtoupper($request->status);
-                
+
                 if ($status === 'CANCEL') {
                     // Fetch both CANCEL and PINDAH statuses
                     $query->whereIn('applications.overall_status', ['CANCEL', 'PINDAH']);
@@ -616,7 +619,7 @@ class CandidateController extends Controller
         // ==========================================
         // if ($request->filled('stage')) {
         //     $stage = $request->stage;
-            
+
         //     // For the Table: Only show candidates who are CURRENTLY in this stage (using MAX id)
         //     $filterByLatestStage = function ($q) use ($stage) {
         //         $q->where('stage_name', $stage)
@@ -642,35 +645,35 @@ class CandidateController extends Controller
             ->orderByDesc('applications.created_at')
             ->paginate(15);
 
-        $statuses = [ 'ON_PROCESS' => 'Proses', 'HIRED' => 'Lulus', 'FAILED' => 'Tidak Lulus', 'CANCEL' => 'Cancel' ];
+        $statuses = ['ON_PROCESS' => 'Proses', 'HIRED' => 'Lulus', 'FAILED' => 'Tidak Lulus', 'CANCEL' => 'Cancel'];
 
 
         // 5. SEPARATED DATA METRICS COMPILATION LOGIC 
         $filteredApplicationIds = (clone $statsQuery)->pluck('applications.id')->toArray();
 
         $stats = [
-            'total_candidates'      => 0,
+            'total_candidates' => 0,
             'candidates_in_process' => 0,
-            'candidates_passed'     => 0,
-            'candidates_failed'     => 0,
-            'candidates_cancelled'  => 0,
-            'duplicate'             => $duplicateCandidateIds->count(),
+            'candidates_passed' => 0,
+            'candidates_failed' => 0,
+            'candidates_cancelled' => 0,
+            'duplicate' => $duplicateCandidateIds->count(),
         ];
 
         if ($request->filled('stage')) {
             $stage = strtolower(trim($request->stage));
-            
+
             // 1. Definisikan urutan tahapan (dari terkecil ke terbesar)
             $stageOrder = [
-                'psikotes'        => 1,
-                'hc_interview'    => 2,
-                'user_interview'  => 3,
-                'interview_bod'   => 4,
+                'psikotes' => 1,
+                'hc_interview' => 2,
+                'user_interview' => 3,
+                'interview_bod' => 4,
                 'offering_letter' => 5,
-                'mcu'             => 6,
-                'hiring'          => 7,
+                'mcu' => 6,
+                'hiring' => 7,
             ];
-            
+
             $targetWeight = $stageOrder[$stage] ?? 0;
 
             // 2. Ambil SEMUA riwayat tahapan untuk kandidat-kandidat ini
@@ -678,9 +681,9 @@ class CandidateController extends Controller
                 ->join('applications', 'application_stages.application_id', '=', 'applications.id')
                 ->whereIn('application_stages.application_id', $filteredApplicationIds)
                 ->select(
-                    'application_stages.application_id', 
-                    'application_stages.stage_name', 
-                    'application_stages.status', 
+                    'application_stages.application_id',
+                    'application_stages.stage_name',
+                    'application_stages.status',
                     'applications.overall_status as parent_status'
                 )
                 ->get();
@@ -692,7 +695,7 @@ class CandidateController extends Controller
                 $appId = $rec->application_id;
                 $sName = strtolower(trim($rec->stage_name));
                 $weight = $stageOrder[$sName] ?? 0;
-                
+
                 if (!isset($appJourneys[$appId])) {
                     $appJourneys[$appId] = [
                         'highest_weight' => 0,
@@ -700,12 +703,12 @@ class CandidateController extends Controller
                         'parent_status' => strtoupper(trim($rec->parent_status ?? '')),
                     ];
                 }
-                
+
                 // Cari tahapan terjauh yang pernah dicapai kandidat ini
                 if ($weight > $appJourneys[$appId]['highest_weight']) {
                     $appJourneys[$appId]['highest_weight'] = $weight;
                 }
-                
+
                 // Simpan status asli dari tahap yang sedang difilter oleh user
                 if ($sName === $stage) {
                     $appJourneys[$appId]['target_stage_status'] = strtoupper(trim($rec->status));
@@ -715,21 +718,21 @@ class CandidateController extends Controller
             // 4. Hitung statistik menggunakan Logika Inferensi
             foreach ($appJourneys as $appId => $journey) {
                 $highestWeight = $journey['highest_weight'];
-                
+
                 // Hanya hitung jika kandidat PERNAH MENCAPAI tahap yang difilter ini
                 if ($highestWeight >= $targetWeight && $targetWeight > 0) {
                     $stats['total_candidates']++;
-                    
+
                     // INFERENSI KUNCI: Jika tahap maksimalnya LEBIH BESAR dari tahap yang dicari,
                     // maka dia OTOMATIS DIANGGAP LULUS tahap ini (mengabaikan data database yang bocor)
                     if ($highestWeight > $targetWeight) {
                         $stats['candidates_passed']++;
-                    } 
+                    }
                     // Jika tahap ini adalah posisi MENTOK mereka saat ini, baca status aslinya
                     else {
                         $rawStatus = $journey['target_stage_status'];
                         $parentStatus = $journey['parent_status'];
-                        
+
                         if (in_array($parentStatus, ['CANCEL', 'PINDAH'])) {
                             $stats['candidates_cancelled']++;
                         } else {
@@ -751,20 +754,20 @@ class CandidateController extends Controller
             $latestApplicationStages = DB::table('application_stages')
                 ->join('applications', 'application_stages.application_id', '=', 'applications.id')
                 ->whereIn('application_stages.application_id', $filteredApplicationIds)
-                ->whereIn('application_stages.id', function($subQuery) {
+                ->whereIn('application_stages.id', function ($subQuery) {
                     $subQuery->select(DB::raw('MAX(id)'))
                         ->from('application_stages')
                         ->groupBy('application_id');
                 })
                 ->select('application_stages.status', 'applications.overall_status as parent_status')
                 ->get();
-                
+
             $stats['total_candidates'] = count($latestApplicationStages);
-            
-            foreach($latestApplicationStages as $rec) {
+
+            foreach ($latestApplicationStages as $rec) {
                 $rawStatus = strtoupper(trim($rec->status));
                 $parentStatus = strtoupper(trim($rec->parent_status ?? ''));
-                
+
                 if (in_array($parentStatus, ['CANCEL', 'PINDAH'])) {
                     $stats['candidates_cancelled']++;
                 } else {
@@ -793,33 +796,92 @@ class CandidateController extends Controller
         // })
         // ->get();
 
+        if (!$hasFilters) {
+            $masterDataCancelSum = DB::table('master_data')
+                ->where('type', 'candidate_stage_status')
+                ->where('key', 'LIKE', '%|CANCEL')
+                ->where('active', 1)
+                ->sum('value');
+
+            $masterDataFailSum = DB::table('master_data')
+                ->where('type', 'candidate_stage_status')
+                ->where('key', 'LIKE', '%|TIDAK LULUS')
+                ->where('active', 1)
+                ->sum('value');
+
+            $masterDataTotalSum = DB::table('master_data')
+                ->where('type', 'candidate_stage_status')
+                ->where('active', 1)
+                ->sum('value');
+        } else {
+            // Apply filters to master_data when filters are present
+            $masterDataQuery = DB::table('master_data')
+                ->where('type', 'candidate_stage_status')
+                ->where('active', 1);
+
+            if ($selectedYear) {
+                $masterDataQuery->where('year', $selectedYear);
+            }
+
+            if ($user->hasRole('kepala departemen') && $user->department_id) {
+                $masterDataQuery->where('department_id', $user->department_id);
+            }
+
+            if ($request->filled('department_id')) {
+                $masterDataQuery->where('department_id', $request->department_id);
+            }
+
+            $masterDataCancelSum = (clone $masterDataQuery)->where('key', 'LIKE', '%|CANCEL')->sum('value');
+            $masterDataFailSum = (clone $masterDataQuery)->where('key', 'LIKE', '%|TIDAK LULUS')->sum('value');
+            $masterDataTotalSum = (clone $masterDataQuery)->sum('value');
+        }
+
+        $stats['candidates_cancelled'] += (int) $masterDataCancelSum;
+        $stats['candidates_failed'] += (int) $masterDataFailSum;
+        $stats['total_candidates'] += (int) $masterDataTotalSum;
+
+
         $activeVacancies = \App\Models\Vacancy::whereHas('mppSubmissions', function ($q) use ($selectedYear) {
             $q->where('proposal_status', 'approved');
             if ($selectedYear) {
                 $q->where('year', $selectedYear);
             }
-        })->with(['mppSubmissions' => function ($q) use ($selectedYear) {
-            $q->where('proposal_status', 'approved');
-            if ($selectedYear) {
-                $q->where('year', $selectedYear);
-            }
-        }])
-        ->when($user->department_id, function ($q) use ($user) {
-            $q->where('department_id', $user->department_id);
-        })
-        ->withCount(['applications' => function ($q) use ($selectedYear) {
-            if ($selectedYear) {
-                $q->where('mpp_year', $selectedYear);
-            }
-        }])->get();
+        })->with([
+                    'mppSubmissions' => function ($q) use ($selectedYear) {
+                        $q->where('proposal_status', 'approved');
+                        if ($selectedYear) {
+                            $q->where('year', $selectedYear);
+                        }
+                    }
+                ])
+            ->when($user->department_id, function ($q) use ($user) {
+                $q->where('department_id', $user->department_id);
+            })
+            ->withCount([
+                'applications' => function ($q) use ($selectedYear) {
+                    if ($selectedYear) {
+                        $q->where('mpp_year', $selectedYear);
+                    }
+                }
+            ])->get();
 
 
         $departments = Department::orderBy('name')->get();
         $sources = Candidate::distinct()->pluck('source');
         $stages = RecruitmentStage::cases();
 
-        return view('candidates.index', compact('applications', 'statuses', 'stats',  'type', 'duplicateCandidateIds', 'departments', 'sources', 'stages', 'selectedYear', 'years',
-        'activeVacancies',
+        return view('candidates.index', compact(
+            'applications',
+            'statuses',
+            'stats',
+            'type',
+            'duplicateCandidateIds',
+            'departments',
+            'sources',
+            'stages',
+            'selectedYear',
+            'years',
+            'activeVacancies',
         ));
     }
 
@@ -832,11 +894,11 @@ class CandidateController extends Controller
     {
         $candidate = Candidate::with([
             'department',
-            'applications' => function($query) {
+            'applications' => function ($query) {
                 $query->orderByDesc('created_at');
             },
             'applications.vacancy',
-            'applications.stages.conductedByUser', 
+            'applications.stages.conductedByUser',
         ])->findOrFail($id);
 
         $targetApplicationId = $request->query('application_id');
@@ -845,16 +907,19 @@ class CandidateController extends Controller
 
         if ($candidate->applications->isNotEmpty()) {
             foreach ($candidate->applications as $app) {
-                $app->loadMissing(['stages' => function ($query) {
-                    $query->orderBy('created_at', 'asc');
-                }, 'stages.conductedByUser']);
+                $app->loadMissing([
+                    'stages' => function ($query) {
+                        $query->orderBy('created_at', 'asc');
+                    },
+                    'stages.conductedByUser'
+                ]);
                 $allTimelines[$app->id] = $candidate->getTimelineForApplication($app);
-                
+
                 if ($targetApplicationId && $app->id == $targetApplicationId) {
                     $primaryApplication = $app;
                 }
             }
-            
+
             if (!$primaryApplication) {
                 $primaryApplication = $candidate->applications->first();
             }
@@ -863,10 +928,12 @@ class CandidateController extends Controller
         $activeVacancies = Vacancy::whereHas('mppSubmissions', function ($q) {
             $q->where('proposal_status', 'approved');
         })
-        ->with(['mppSubmissions' => function($q) {
-            $q->where('proposal_status', 'approved')->select('mpp_submissions.id', 'year');
-        }])
-        ->get();
+            ->with([
+                'mppSubmissions' => function ($q) {
+                    $q->where('proposal_status', 'approved')->select('mpp_submissions.id', 'year');
+                }
+            ])
+            ->get();
 
         return view('candidates.show', compact('candidate', 'allTimelines', 'primaryApplication', 'activeVacancies'));
     }
@@ -905,12 +972,12 @@ class CandidateController extends Controller
             $candidate = $application->candidate;
 
             $candidate->department_id = $newVacancy->department_id;
-            
+
             $mppSubmission = $newVacancy->mppSubmissions()
                 ->where('year', $validated['mpp_year'])
                 ->where('proposal_status', 'approved')
                 ->first();
-            
+
             if ($mppSubmission) {
                 $vacancyStatus = $mppSubmission->pivot->vacancy_status;
                 $candidate->airsys_internal = ($vacancyStatus === 'OSPKWT') ? 'Yes' : 'No';
@@ -921,7 +988,7 @@ class CandidateController extends Controller
                 'candidate_id' => $candidate->id,
                 'vacancy_id' => $newVacancy->id,
                 'mpp_year' => $validated['mpp_year'],
-                'overall_status' => $application->overall_status, 
+                'overall_status' => $application->overall_status,
             ]);
 
             $application->update([
@@ -940,7 +1007,7 @@ class CandidateController extends Controller
                 ]);
             } catch (\Exception $e) {
                 Log::warning("Could not automatically pass BOD stage during move: " . $e->getMessage());
-                
+
                 $latestStage = $newApplication->stages()->orderBy('id', 'desc')->first();
                 if ($latestStage) {
                     $existingNotes = $latestStage->notes ?? '';

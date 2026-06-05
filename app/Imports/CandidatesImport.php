@@ -107,33 +107,38 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
                 // Eager load the specific MPP submission relationship
                 // Modified to accept vacancy with proposal_status 'approved'
                 // even if MPP submission status is still 'submitted'
+
                 $vacancy = Vacancy::where('name', $vacancyName)
-                    ->with(['mppSubmissions' => function ($query) use ($mppYear) {
-                        $query->where('year', $mppYear)
-                              ->whereIn('status', [
-                                  MPPSubmission::STATUS_APPROVED,
-                                  MPPSubmission::STATUS_SUBMITTED
-                              ])
-                              ->where('mpp_submission_vacancy.proposal_status', 'approved');
-                    }])
+                    ->with([
+                        'mppSubmissions' => function ($query) use ($mppYear) {
+                            $query->where('year', $mppYear)
+                                ->whereIn('submission_type', ['planned', 'unplanned'])
+                                ->whereIn('status', [
+                                    MPPSubmission::STATUS_APPROVED,
+                                    MPPSubmission::STATUS_SUBMITTED
+                                ])
+                                ->where('mpp_submission_vacancy.proposal_status', 'approved');
+                        }
+                    ])
                     ->whereHas('mppSubmissions', function ($q) use ($mppYear) {
                         $q->where('year', $mppYear)
-                          ->whereIn('status', [
-                              MPPSubmission::STATUS_APPROVED,
-                              MPPSubmission::STATUS_SUBMITTED
-                          ])
-                          ->where('mpp_submission_vacancy.proposal_status', 'approved');
+                            ->whereIn('submission_type', ['planned', 'unplanned'])
+                            ->whereIn('status', [
+                                MPPSubmission::STATUS_APPROVED,
+                                MPPSubmission::STATUS_SUBMITTED
+                            ])
+                            ->where('mpp_submission_vacancy.proposal_status', 'approved');
                     })->first();
 
                 // Get the pivot data from the loaded relationship
                 $pivotData = $vacancy && $vacancy->mppSubmissions->isNotEmpty()
                     ? $vacancy->mppSubmissions->first()->pivot
                     : null;
-                
+
                 if (!$vacancy || !$pivotData) {
                     $this->skipped++;
                     $errorMessage = 'Invalid Vacancy: "' . $vacancyName . '" for MPP year ' . $mppYear . ' was not found or not approved. Row skipped.';
-                    
+
                     $this->errors[] = [
                         'row' => $rowIndex,
                         'applicant_id' => $applicantId,
@@ -141,7 +146,7 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
                         'vacancy_name_provided' => $vacancyName,
                         'error' => $errorMessage,
                     ];
-                    
+
                     Log::warning('CandidatesImport: Vacancy not found or not approved. Skipping row.', [
                         'row' => $rowIndex,
                         'applicant_id' => $applicantId,
@@ -183,7 +188,7 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
             // Convert FEMALE/MALE to Laki-laki/Perempuan
             $genderRaw = trim($row['jk'] ?? '');
             $genderNormalized = null;
-            
+
             if ($genderRaw !== '') {
                 $genderLower = strtolower($genderRaw);
                 if (in_array($genderLower, ['female', 'perempuan', 'p', 'wanita'])) {
@@ -197,14 +202,14 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
             // Try to extract psikotest result from multiple possible field names
             $psikotestResultRaw = '';
             $possibleFields = ['psikotest_result', 'psikotes_result', 'hasil', 'result', 'status', 'keterangan', 'hasil_psikotes'];
-            
+
             foreach ($possibleFields as $field) {
                 if (!empty($row[$field])) {
                     $psikotestResultRaw = strtolower(trim($row[$field]));
                     break;
                 }
             }
-            
+
             $psikotestResult = 'PROSES'; // Default
             $isPass = false;
             $isFail = false;
@@ -312,7 +317,7 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
                     'row' => $rowIndex,
                     'applicant_id' => $applicantId,
                     'nama' => $name,
-                    'error' => 'Tidak dapat membaca format tanggal lahir: ' . (string)$birthDateValue
+                    'error' => 'Tidak dapat membaca format tanggal lahir: ' . (string) $birthDateValue
                 ];
                 Log::warning('CandidatesImport: Could not parse birth date', [
                     'row' => $rowIndex,
@@ -374,7 +379,7 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
             $psikotesStage = $application->stages()
                 ->where('stage_name', 'psikotes')
                 ->first();
-            
+
             if ($psikotesStage) {
                 // Update existing stage
                 $psikotesStage->update([
@@ -407,7 +412,7 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
             if ($isPass) {
                 // LULUS: Create HC Interview stage automatically
                 $nextTestDate = now()->addDays(10)->toDateString();
-                
+
                 $application->stages()->updateOrCreate(
                     [
                         'stage_name' => 'hc_interview',
@@ -444,7 +449,7 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
             } elseif ($isFail) {
                 // TIDAK LULUS: Mark all stages as rejected
                 $application->stages()->update(['status' => 'TIDAK LULUS']);
-                
+
                 Log::info('CandidatesImport: Candidate FAILED psikotes - Application rejected', [
                     'candidate_id' => $candidate->id,
                     'applicant_id' => $applicantId,
