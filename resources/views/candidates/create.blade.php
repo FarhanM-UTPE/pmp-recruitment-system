@@ -39,7 +39,21 @@
                     </div>
                 @endif
 
-                <form method="POST" action="{{ route('candidates.store') }}" enctype="multipart/form-data" class="space-y-6">
+                <form method="POST" action="{{ route('candidates.store') }}" enctype="multipart/form-data" class="space-y-6"
+                    x-data="{
+                        vacancies: {{ json_encode($vacancies->keyBy('id')) }},
+                        selectedVacancyId: '{{ old('vacancy_id') }}',
+                        selectedVacancy: null,
+                        selectedMppYear: '{{ old('mpp_year') }}',
+                        get requiresMppYear() {
+                            return this.selectedVacancy && this.selectedVacancy.mpp_submissions && this.selectedVacancy.mpp_submissions.length > 0;
+                        },
+                        init() {
+                            if (this.selectedVacancyId && this.vacancies[this.selectedVacancyId]) {
+                                this.selectedVacancy = this.vacancies[this.selectedVacancyId];
+                            }
+                        }
+                    }" x-init="init()">
                     @csrf
 
                     <!-- Basic Information -->
@@ -85,16 +99,7 @@
                     </div>
 
                     <!-- Position Information -->
-                    <div class="bg-gray-50 rounded-lg p-4" x-data="{
-                        vacancies: {{ json_encode($vacancies->keyBy('id')) }},
-                        selectedVacancyId: '{{ old('vacancy_id') }}',
-                        selectedVacancy: null,
-                        init() {
-                            if (this.selectedVacancyId && this.vacancies[this.selectedVacancyId]) {
-                                this.selectedVacancy = this.vacancies[this.selectedVacancyId];
-                            }
-                        }
-                    }" x-init="init()">
+                    <div class="bg-gray-50 rounded-lg p-4">
                         <h4 class="text-md font-medium text-gray-900 mb-4">Informasi Posisi</h4>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
@@ -102,7 +107,7 @@
                                 <select name="vacancy_id" id="vacancy_id"
                                     class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                                     required x-model="selectedVacancyId"
-                                    @change="selectedVacancy = vacancies[$event.target.value]">
+                                    @change="selectedVacancy = vacancies[$event.target.value]; selectedMppYear = ''">
                                     <option value="">Pilih Lowongan</option>
                                     @foreach ($vacancies as $vacancy)
                                         <option value="{{ $vacancy->id }}"
@@ -116,7 +121,8 @@
                                 x-show="selectedVacancy && selectedVacancy.mpp_submissions && selectedVacancy.mpp_submissions.length > 0">
                                 <label for="mpp_year" class="block text-sm font-medium text-gray-700">Tahun MPP *</label>
                                 <select name="mpp_year" id="mpp_year"
-                                    class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                    class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                    x-model="selectedMppYear" :required="requiresMppYear">
                                     <option value="">Pilih Tahun</option>
                                     <template x-for="submission in selectedVacancy.mpp_submissions" :key="submission.id">
                                         <option :value="submission.year"
@@ -184,8 +190,9 @@
                             <i class="fas fa-times text-sm"></i>
                             <span>Batal</span>
                         </button>
-                        <button type="submit"
-                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                        <button type="submit" :disabled="requiresMppYear && !selectedMppYear"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2"
+                            :class="(requiresMppYear && !selectedMppYear) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'">
                             <i class="fas fa-save text-sm"></i>
                             <span>Simpan</span>
                         </button>
