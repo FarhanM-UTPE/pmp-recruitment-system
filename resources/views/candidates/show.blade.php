@@ -536,6 +536,7 @@
                             </div>
                         @endif
                     @endcan
+
                 </div>
 
                 <!-- Konten Utama - Riwayat dan Timeline -->
@@ -939,6 +940,539 @@
                     </div>
                 </div>
             </div>
+
+            @if($hasAssessmentScore)
+                @php
+                    $assessmentFieldAliases = [
+                        'presistence_score' => 'persistence_score',
+                    ];
+
+                    $assessmentValue = function (string $field) use ($candidateAssessment, $assessmentFieldAliases) {
+                        $resolvedField = $assessmentFieldAliases[$field] ?? $field;
+                        if (!$candidateAssessment || !isset($candidateAssessment->{$resolvedField})) {
+                            return null;
+                        }
+
+                        return $candidateAssessment->{$resolvedField};
+                    };
+
+                    $assessmentMarker = function (string $field, int $target) use ($assessmentValue) {
+                        $value = $assessmentValue($field);
+                        if ($value === null) {
+                            return '';
+                        }
+
+                        return (int) round((float) $value) === $target ? 'v' : '';
+                    };
+
+                    $assessmentBandLabel = function (string $field) use ($assessmentValue) {
+                        $value = $assessmentValue($field);
+                        if ($value === null) {
+                            return '';
+                        }
+
+                        $score = (int) round((float) $value);
+                        if ($score >= 1 && $score <= 2) {
+                            return 'Need Improvement';
+                        }
+                        if ($score = 3) {
+                            return 'Effective';
+                        }
+                        if ($score >= 4 && $score <= 5) {
+                            return 'Highly Effective';
+                        }
+
+                        return '';
+                    };
+
+                    $assessmentBandDisplay = function (string $field, string $targetLabel) use ($assessmentBandLabel, $assessmentValue) {
+                        $actualLabel = $assessmentBandLabel($field);
+                        if ($actualLabel !== $targetLabel) {
+                            return '';
+                        }
+
+                        $score = (int) round((float) $assessmentValue($field));
+                        return (string) $score;
+                    };
+                @endphp
+
+            <div class="mt-6 overflow-hidden rounded-lg bg-white shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Personality Dimension</h3>
+                    <p class="mt-1 text-sm text-gray-500">Profil Psikotes Kandidat</p>
+                </div>
+                <div class="px-6 py-4">
+                    <style>
+                        #personality-dimension-table {
+                            font-size: 11px;
+                        }
+
+                        #personality-dimension-table th,
+                        #personality-dimension-table td {
+                            padding: 4px 6px !important;
+                            line-height: 1.2;
+                            border-color: rgba(107, 114, 128, 1) !important;
+                        }
+
+                        #personality-dimension-table .dimension-spacer-row td {
+                            height: 28px;
+                            padding-top: 10px !important;
+                            padding-bottom: 10px !important;
+                            text-align: center !important;
+                            font-weight: 700 !important;
+                        }
+                    </style>
+                    <div class="overflow-x-auto">
+                        <table id="personality-dimension-table" class="w-full table-fixed border border-gray-300 border-collapse text-sm text-gray-800">
+                            <colgroup>
+                                <col class="w-[35%]">
+                                <col class="w-[6.5%]">
+                                <col class="w-[6.5%]">
+                                <col class="w-[6.5%]">
+                                <col class="w-[6.5%]" style="background-color: rgba(197, 224, 179, 1);">
+                                <col class="w-[6.5%]" style="background-color: rgba(197, 224, 179, 1);">
+                                <col class="w-[6.5%]" style="background-color: rgba(197, 224, 179, 1);">
+                                <col class="w-[6.5%]" style="background-color: rgba(197, 224, 179, 1);">
+                                <col class="w-[6.5%]">
+                                <col class="w-[6.5%]">
+                                <col class="w-[6.5%]">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th rowspan="3"
+                                        class="border border-gray-300 bg-gray-100 px-3 py-2 text-left font-semibold align-middle">
+                                        Personality Dimension
+                                    </th>
+                                    <th colspan="10"
+                                        class="border border-gray-300 bg-gray-100 px-3 py-2 text-center font-semibold">
+                                        Rating
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <th colspan="3"
+                                        class="border border-gray-500 bg-gray-50 px-3 py-2 text-center font-medium" style="background-color: rgba(216, 216, 216, 1);">
+                                        Need Improvement
+                                    </th>
+                                    <th colspan="4"
+                                        class="border border-gray-500 bg-gray-50 px-3 py-2 text-center font-medium" style="background-color: rgba(197, 224, 179, 1);">
+                                        Effective
+                                    </th>
+                                    <th colspan="3"
+                                        class="border border-gray-500 bg-gray-50 px-3 py-2 text-center font-medium" style="background-color: rgba(216, 216, 216, 1);">
+                                        Highly Effective
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(216, 216, 216, 1);">1</th>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(216, 216, 216, 1);">2</th>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(216, 216, 216, 1);">3</th>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(197, 224, 179, 1);">4</th>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(197, 224, 179, 1);">5</th>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(197, 224, 179, 1);">6</th>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(197, 224, 179, 1);">7</th>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(216, 216, 216, 1);">8</th>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(216, 216, 216, 1);">9</th>
+                                    <th class="border border-gray-500 px-3 py-2 text-center font-medium" style="background-color: rgba(216, 216, 216, 1);">10</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td rowspan="2" class="border border-gray-300 px-3 py-2 text-base font-bold text-black align-top" style="background-color: rgba(142, 170, 219, 1);">Interpersonal Skill</td>
+                                    <td colspan="10" class="border border-gray-300 px-3 py-2 text-gray-700">
+                                        <span class="block text-[10px] text-gray-600 leading-tight">
+                                            Kompetensi ini mengukur potensi untuk memiliki keterampilan komunikasi yang baik, sehingga dapat mempengaruhi orang lain,
+                                            mampu membangun hubungan baik dengan berbagai orang dari berbagai tingkatan. Hal ini juga mendukung kemampuan untuk beradaptasi dan menyesuaikan diri dengan berbagai situasi.
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr class="dimension-spacer-row">
+                                    <td colspan="3" class="border border-r px-3 py-3 text-center font-bold">{{ $assessmentBandDisplay('competency_is_score', 'Need Improvement') }}</td>
+                                    <td colspan="4" class="border border-r px-3 py-3">{{ $assessmentBandDisplay('competency_is_score', 'Effective') }}</td>
+                                    <td colspan="3" class="border border-gray-300 px-3 py-3">{{ $assessmentBandDisplay('competency_is_score', 'Highly Effective') }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">a. Extraversion</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan untuk merasa nyaman ketika berinteraksi dengan orang banyak dan luwes saat berkomunikasi.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 10) }}</td>
+                                </tr>
+                                    <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">b. Assertiveness</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan seseorang untuk menampilkan dirinya secara apa adanya, serta terbuka dan berani dalam mengungkapkan pendapat.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('assertiveness_score', 10) }}</td>
+                                </tr>
+                                                                <tr>
+                                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                                                    <span class="font-medium">c. Impact and Influence (IMP)</span><br>
+                                                                    <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan untuk dapat memengaruhi dan meyakinkan orang lain.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">d. Flexibility</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan untuk mudah menyesuaikan diri dengan berbagai orang baru.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('flexibility_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">e. Reading Comprehension</span><br>
+                                            <span class="block text-[10px] text-gray-600 leading-tight">Kemampuan untuk memahami kata-kata dan instruksi dan waktu yang dibutuhkan untuk memahami instruksi lisan maupun tertulis.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('reading_comprehension_score', 10) }}</td>
+                                </tr>
+
+
+                                <tr>
+                                    <td rowspan="2" class="border border-gray-300 px-3 py-2 text-base font-bold text-black align-top" style="background-color: rgba(244, 176, 131, 1);">Analysis &amp; Judgement</td>
+                                    <td colspan="10" class="border border-gray-300 px-3 py-2 text-gray-700">
+                                        <span class="block text-[10px] text-gray-600 leading-tight">
+Kompetensi ini mengukur potensi untuk mengumpulkan dan menganalisa data dan informasi penting guna memahami penyebab dari suatu masalah, serta mendukungnya dalam membuat keputusan dengan cepat dan tepat.
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr class="dimension-spacer-row">
+                                    <td colspan="3" class="border border-r px-3 py-3 text-center font-bold">{{ $assessmentBandDisplay('competency_aj_score', 'Need Improvement') }}</td>
+                                    <td colspan="4" class="border border-r px-3 py-3">{{ $assessmentBandDisplay('competency_aj_score', 'Effective') }}</td>
+                                    <td colspan="3" class="border border-gray-300 px-3 py-3">{{ $assessmentBandDisplay('competency_aj_score', 'Highly Effective') }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(247, 202, 172, 1);">
+                                        <span class="font-medium">Ideas</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Ketertarikan seseorang dengan berbagai ide maupun diskusi yang bersifat teoretis dan filosofis.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('idea_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(247, 202, 172, 1);">
+                                        <span class="font-medium">Deductive Reasoning</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kemudahan untuk membuat kesimpulan yang tepat serta waktu yang dibutuhkan dalam memecahkan masalah.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(247, 202, 172, 1);">
+                                        <span class="font-medium">Inductive Reasoning</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kemudahan dalam memahami konsep dan teori yang bersifat abstrak serta hubungannya terhadap waktu yang diperlukan dalam memformulasikan kerangka teoretis yang baru.</span>
+                                    </td>
+                                      <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('inductive_reasoning_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(247, 202, 172, 1);">
+                                        <span class="font-medium">Perceptual Speed</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kemampuan seseorang untuk dengan cepat dan akurat mengenali detail visual, membandingkan informasi, serta mendeteksi perbedaan atau kesamaan dalam pola, angka, huruf, atau objek.</span>
+                                    </td>
+                                  <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('perceptual_speed_score', 10) }}</td>
+                                </tr>
+
+                                <tr>
+                                    <td rowspan="2" class="border border-gray-300 px-3 py-2 text-base font-bold text-black align-top" style="background-color: rgba(142, 170, 219, 1);">Planning &amp; Driving Action</td>
+                                    <td colspan="10" class="border border-gray-300 px-3 py-2 text-gray-700">
+                                        <span class="block text-[10px] text-gray-600 leading-tight">
+Kompetensi ini mengukur potensi untuk secara sistematis menetapkan obyektif dan rencana yang jelas, serta memanfaatkan sumber daya guna mencapai hasil yang diinginkan
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr class="dimension-spacer-row">
+                                    <td colspan="3" class="border border-r px-3 py-3 text-center font-bold">{{ $assessmentBandDisplay('competency_pda_score', 'Need Improvement') }}</td>
+                                    <td colspan="4" class="border border-r px-3 py-3">{{ $assessmentBandDisplay('competency_pda_score', 'Effective') }}</td>
+                                    <td colspan="3" class="border border-gray-300 px-3 py-3 text-center font-bold">{{ $assessmentBandDisplay('competency_pda_score', 'Highly Effective') }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">Working Autonomously</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan untuk memiliki inisiatif dalam memulai banyak hal, sehingga memiliki kepercayaan diri untuk menyelesaikan tugas dengan benar.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_autonomously_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">Conscientiousness</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan seseorang untuk membuat perencanaan kerja serta mematuhi aturan dan prosedur kerja.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('conscientiousness_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">Deductive Reasoning</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Analisis deduktif dan kemudahan untuk membuat kesimpulan yang tepat serta waktu yang dibutuhkan dalam memecahkan masalah.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('deductive_reasoning_score', 10) }}</td>
+                                </tr>
+
+                                <tr>
+                                    <td rowspan="2" class="border border-gray-300 px-3 py-2 text-base font-bold text-black align-top" style="background-color: rgba(244, 176, 131, 1);">Teamwork</td>
+                                    <td colspan="10" class="border border-gray-300 px-3 py-2 text-gray-700">
+                                        <span class="block text-[10px] text-gray-600 leading-tight">
+Kompetensi ini mengukur potensi untuk bekerja secara bersama-sama dengan sekelompok orang untuk mencapai tujuan tertentu.
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr class="dimension-spacer-row">
+                                    <td colspan="3" class="border border-r px-3 py-3 text-center font-bold">{{ $assessmentBandDisplay('competency_tw_score', 'Need Improvement') }}</td>
+                                    <td colspan="4" class="border border-r px-3 py-3 text-center font-bold">{{ $assessmentBandDisplay('competency_tw_score', 'Effective') }}</td>
+                                    <td colspan="3" class="border border-gray-300 px-3 py-3">{{ $assessmentBandDisplay('competency_tw_score', 'Highly Effective') }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(247, 202, 172, 1);">
+                                        <span class="font-medium">Teamwork</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan seseorang untuk senang bekerja di dalam kelompok, bersedia mengambil tanggung jawab, dan berkomitmen menjalankan keputusan-keputusan kelompok.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('teamwork_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(247, 202, 172, 1);">
+                                        <span class="font-medium">Extraversion</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan untuk merasa nyaman ketika berinteraksi dengan orang banyak dan luwes saat berkomunikasi.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('extraversion_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(247, 202, 172, 1);">
+                                        <span class="font-medium">Impact and Influence (IMP)</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan untuk dapat memengaruhi dan meyakinkan orang lain.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('impact_and_influence_score', 10) }}</td>
+                                </tr>
+
+                                <tr>
+                                    <td rowspan="2" class="border border-gray-300 px-3 py-2 text-base font-bold text-black align-top" style="background-color: rgba(142, 170, 219, 1);">Drive &amp; Courage</td>
+                                    <td colspan="10" class="border border-gray-300 px-3 py-2 text-gray-700">
+                                        <span class="block text-[10px] text-gray-600 leading-tight">
+Kompetensi ini mengukur potensi untuk belajar dan fokus pada unjuk kerja, tidak takut berhadapan langsung dengan hal-hal yang belum jelas, bertentangan dan memiliki resiko langsung, serta bersedia mengambil tindakan berdasarkan apa yang diyakininya
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr class="dimension-spacer-row">
+                                    <td colspan="3" class="border border-r px-3 py-3 text-center font-bold">{{ $assessmentBandDisplay('competency_dc_score', 'Need Improvement') }}</td>
+                                    <td colspan="4" class="border border-r px-3 py-3">{{ $assessmentBandDisplay('competency_dc_score', 'Effective') }}</td>
+                                    <td colspan="3" class="border border-gray-300 px-3 py-3">{{ $assessmentBandDisplay('competency_dc_score', 'Highly Effective') }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">Persistence</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan seseorang untuk gigih dalam menyelesaikan pekerjaannya.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('presistence_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">Achievement Orientation</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan untuk menampilkan diri sebagai orang yang berorientasi pada tujuan, sehingga memiliki hasrat yang kuat untuk menjadi yang terbaik.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('achievement_orientation_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">Actions</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kecenderungan seseorang untuk memiliki ketertarikan dengan banyak hal dan terbuka dengan perubahan.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('action_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">Working Memory</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Kemampuan memilah dan mengolah informasi yang ada dan hubungannya terhadap waktu yang dibutuhkan dalam belajar.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('working_memory_score', 10) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-gray-300 px-3 py-2 align-top" style="background-color: rgba(222, 234, 246, 1);">
+                                        <span class="font-medium">Personal Motivation</span><br>
+                                        <span class="block text-[10px] text-gray-600 leading-tight">Dorongan internal dalam diri seseorang yang membuatnya berkeinginan dan berusaha untuk mencapai tujuan tertentu, baik dalam kehidupan pribadi, pekerjaan, maupun pengembangan diri.</span>
+                                    </td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 1) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 2) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 3) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 4) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 5) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 6) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 7) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 8) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 9) }}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center font-semibold">{{ $assessmentMarker('personal_motivation_score', 10) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            @endif
         </div>
     @endcan
 
@@ -1481,3 +2015,4 @@
     @endpush
 
 @endsection
+
