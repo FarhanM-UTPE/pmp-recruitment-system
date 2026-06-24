@@ -168,7 +168,7 @@ class Candidate extends Model
         if ($failedStage) {
             return 'FAILED';
         }
-        
+
         // Check for hired status
         $hiredStage = $stages->first(function ($stage) {
             return in_array(strtoupper($stage->status), ['LULUS', 'DITERIMA', 'HIRED']);
@@ -181,7 +181,7 @@ class Candidate extends Model
                 return 'HIRED';
             }
         }
-        
+
         // Check for waiting for HC interview
         $psikotestPassed = $stages->first(function ($stage) {
             return strtoupper($stage->stage_name) === 'PSIKOTES' && strtoupper($stage->status) === 'LULUS';
@@ -236,7 +236,7 @@ class Candidate extends Model
                 ->first();
             return $nextStage ? strtoupper($nextStage->stage_name) : strtoupper($passedStage->stage_name);
         }
-        
+
         // If no stage is passed or failed, they are in the first stage
         $firstStage = $this->applicationStages()
             ->orderBy('application_stages.created_at')
@@ -253,11 +253,14 @@ class Candidate extends Model
     {
         // For backward compatibility, default to the latest application's timeline
         $latestApplication = $this->applications()
-                                  ->with(['stages' => function ($query) {
-                                      $query->orderBy('created_at', 'asc');
-                                  }, 'stages.conductedByUser'])
-                                  ->latest('updated_at') // Use updated_at for latest overall activity
-                                  ->first();
+            ->with([
+                'stages' => function ($query) {
+                    $query->orderBy('created_at', 'asc');
+                },
+                'stages.conductedByUser'
+            ])
+            ->latest('updated_at') // Use updated_at for latest overall activity
+            ->first();
 
         if (!$latestApplication) {
             return [];
@@ -284,16 +287,19 @@ class Candidate extends Model
 
         // Ensure stages and conductedByUser are loaded for the provided application
         if (!$application->relationLoaded('stages') || !$application->stages->every(fn($stage) => $stage->relationLoaded('conductedByUser'))) {
-            $application->load(['stages' => function ($query) {
-                $query->orderBy('created_at', 'asc');
-            }, 'stages.conductedByUser']);
+            $application->load([
+                'stages' => function ($query) {
+                    $query->orderBy('created_at', 'asc');
+                },
+                'stages.conductedByUser'
+            ]);
         }
 
         // Create a lookup map of existing stages for efficient access.
         $existingStages = $application->stages->keyBy('stage_name');
         $timeline = [];
         $previousStagePassed = true; // Start with the assumption that the first stage is unlocked.
-        
+
         // Get stage keys in order
         $stageKeys = array_keys($stageConfig);
 
@@ -303,7 +309,7 @@ class Candidate extends Model
 
             $currentStageStatus = 'locked'; // Default to locked.
             $hasPassed = false;
-            
+
             if ($previousStagePassed) {
                 if ($stage) {
                     $hasPassed = in_array(strtoupper($stageStatus), ['LULUS', 'DITERIMA', 'DISARANKAN', 'HIRED']);
@@ -317,26 +323,26 @@ class Candidate extends Model
                         $currentStageStatus = 'in_progress';
                     }
                 } else {
-                     // If the stage does not exist but the previous one passed, it's the current, pending stage.
+                    // If the stage does not exist but the previous one passed, it's the current, pending stage.
                     $currentStageStatus = 'pending';
                 }
             }
-            
+
             // Check if next stage exists
             $currentIndex = array_search($key, $stageKeys);
             $nextStageKey = ($currentIndex !== false && isset($stageKeys[$currentIndex + 1])) ? $stageKeys[$currentIndex + 1] : null;
             $nextStage = $nextStageKey ? $existingStages->get($nextStageKey) : null;
             $nextStageExists = $nextStage !== null;
             $nextStageScheduledDate = $nextStage && $nextStage->scheduled_date ? $nextStage->scheduled_date->format('Y-m-d') : null;
-            
+
             // Check previous stage for min date validation
             $previousStageKey = ($currentIndex !== false && $currentIndex > 0) ? $stageKeys[$currentIndex - 1] : null;
             $previousStage = $previousStageKey ? $existingStages->get($previousStageKey) : null;
             $previousStageDate = $previousStage && $previousStage->scheduled_date ? $previousStage->scheduled_date->format('Y-m-d') : null;
-            
+
             // Check if this stage was edited
             $isEdited = false;
-            
+
             // Can edit result only if next stage doesn't exist yet
             $canEditResult = !$nextStageExists;
 
@@ -347,27 +353,27 @@ class Candidate extends Model
             if ($stage && strtoupper($stageStatus) !== 'MENUNGGU') {
                 if (!$nextStage || strtoupper($nextStage->status) === 'MENUNGGU') {
                     $canReset = true;
-                    
+
                     // Special rule: If this is the automated BOD stage from a move, do not allow reset.
                     if ($key === 'interview_bod' && $stage->notes && str_contains($stage->notes, '[PINDAH POSISI]')) {
                         $canReset = false;
                     }
                 }
             }
-            
+
             // SPECIAL CASE: If application overall_status is 'PINDAH', 
             // the last completed stage should be resettable to undo the move.
             if ($application->overall_status === 'PINDAH') {
-                 // Find the actual last stage that exists in the DB for this application
-                 $lastStageInDb = $application->stages->sortByDesc(function ($s) use ($stageConfig) {
-                     return array_search($s->stage_name, array_keys($stageConfig));
-                 })->first();
-                 
-                 if ($lastStageInDb && $stage && $stage->id === $lastStageInDb->id) {
-                     $canReset = true;
-                 }
+                // Find the actual last stage that exists in the DB for this application
+                $lastStageInDb = $application->stages->sortByDesc(function ($s) use ($stageConfig) {
+                    return array_search($s->stage_name, array_keys($stageConfig));
+                })->first();
+
+                if ($lastStageInDb && $stage && $stage->id === $lastStageInDb->id) {
+                    $canReset = true;
+                }
             }
-            
+
             $timeline[] = [
                 'stage_key' => $key,
                 'display_name' => $displayName,
