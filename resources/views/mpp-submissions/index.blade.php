@@ -70,8 +70,7 @@
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jenis
                 MPP</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
-              Departemen</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departemen</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Dibuat Oleh</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -150,7 +149,7 @@
               </tr>
             @empty
               <tr>
-                <td colspan="8" class="px-6 py-4 text-center text-gray-500">
+                <td colspan="9" class="px-6 py-4 text-center text-gray-500">
                   Tidak ada pengajuan MPP
                 </td>
               </tr>

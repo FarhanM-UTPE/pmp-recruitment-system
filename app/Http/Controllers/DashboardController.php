@@ -134,7 +134,7 @@ class DashboardController extends Controller
             }
         ])->get();
 
-        $recentCandidatesQuery = Candidate::with('department', 'applications')
+        $recentCandidatesQuery = Candidate::with('department', 'applications.vacancy')
             ->orderBy('created_at', 'desc')
             ->limit(5);
         if ($user->hasRole('kepala departemen')) {
