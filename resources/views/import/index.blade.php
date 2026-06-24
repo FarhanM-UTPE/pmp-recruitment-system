@@ -5,12 +5,6 @@
 @section('page-subtitle', 'Upload file Excel untuk import data kandidat')
 
 @push('header-filters')
-<div class="flex items-center gap-2">
-    <a href="{{ route('import.template', 'candidates') }}" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm transition-colors">
-        <i class="fas fa-download"></i>
-        <span>Template Import</span>
-    </a>
-</div>
 @endpush
 
 @section('content')
@@ -119,22 +113,25 @@
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <template x-for="header in previewHeaders" :key="header">
+                                    <template x-for="(header, headerIndex) in previewHeaders" :key="`h-${headerIndex}-${header}`">
                                         <th class="px-4 py-2 text-left font-medium text-gray-600 uppercase tracking-wider" x-text="header.replace(/_/g, ' ')"></th>
                                     </template>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <template x-for="row in previewData" :key="row.id">
+                                <template x-for="(row, rowIndex) in previewData" :key="`r-${rowIndex}`">
                                     <tr>
-                                        <template x-for="header in previewHeaders" :key="header">
-                                            <td class="px-4 py-2 whitespace-nowrap text-gray-700" x-text="row[header]"></td>
+                                        <template x-for="(header, headerIndex) in previewHeaders" :key="`c-${rowIndex}-${headerIndex}-${header}`">
+                                            <td class="px-4 py-2 whitespace-nowrap text-gray-700" x-text="row[header] ?? '-'"></td>
                                         </template>
                                     </tr>
                                 </template>
                             </tbody>
                         </table>
                     </div>
+                    <p x-show="previewData.length === 0" class="mt-3 text-sm text-gray-500">
+                        Tidak ada baris preview yang dapat ditampilkan.
+                    </p>
                 </div>
             </div>
 

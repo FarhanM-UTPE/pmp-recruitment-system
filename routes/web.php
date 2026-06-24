@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\AssessmentImportController;
 use App\Http\Controllers\CandidateController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\ProfileController;
@@ -26,7 +27,7 @@ Route::get('/', function () {
 });
 
 // Authentication routes
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';
 
 Route::get('/calendar', function () {
     return view('calendar.index');
@@ -35,7 +36,7 @@ Route::get('/calendar', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard - NO PERMISSION MIDDLEWARE (all roles can access)
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    
+
     // Dashboard API Routes
     Route::get('/dashboard/stats/monthly', [DashboardController::class, 'getCandidateStatsByMonth'])->name('dashboard.stats.monthly');
     Route::get('/dashboard/years', [DashboardController::class, 'getAvailableYears'])->name('dashboard.years');
@@ -44,15 +45,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('events')->name('events.')->group(function () {
         // Main calendar events endpoint
         Route::get('/calendar', [DashboardController::class, 'getCalendarEvents'])->name('calendar');
-        
+
         // Additional calendar endpoints
         Route::get('/today', [DashboardController::class, 'getTodayEvents'])->name('today');
         Route::get('/upcoming', [DashboardController::class, 'getUpcomingEvents'])->name('upcoming');
         Route::get('/by-date/range', [DashboardController::class, 'getEventsByDateRange'])->name('by-date');
-        
+
         // Debug endpoint
         Route::get('/debug', [DashboardController::class, 'debugCalendarEvents'])->name('debug');
-        
+
         // Event CRUD operations
         Route::post('/', [EventController::class, 'store'])->name('store');
         Route::get('/{event}', [EventController::class, 'show'])->name('show');
@@ -89,10 +90,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('/{candidate}', [CandidateController::class, 'update'])->name('update');
             Route::post('/{candidate}/switch-type', [CandidateController::class, 'switchType'])->name('switchType');
             Route::post('/bulk-switch-type', [CandidateController::class, 'bulkSwitchType'])->name('bulkSwitchType');
-            
+
             Route::post('/bulk-update-status', [CandidateController::class, 'bulkUpdateStatus'])->name('bulkUpdateStatus');
             Route::post('/bulk-move-stage', [CandidateController::class, 'bulkMoveStage'])->name('bulkMoveStage');
-            
+
             Route::post('/{candidate}/next-test-date', [CandidateController::class, 'setNextTestDate'])->name('setNextTestDate');
             Route::post('/check-duplicate', [CandidateController::class, 'checkDuplicate'])->name('checkDuplicate');
         });
@@ -124,8 +125,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/preview', [ImportController::class, 'preview'])->name('preview');
         Route::post('/confirm', [ImportController::class, 'confirmImport'])->name('confirm');
         Route::post('/cancel', [ImportController::class, 'cancelImport'])->name('cancel');
+
+        Route::get('/assessment', [AssessmentImportController::class, 'index'])->name('assessment.index');
+        Route::post('/assessment/preview', [AssessmentImportController::class, 'preview'])->name('assessment.preview');
+        Route::post('/assessment/confirm', [AssessmentImportController::class, 'confirmImport'])->name('assessment.confirm');
+        Route::post('/assessment/cancel', [AssessmentImportController::class, 'cancelImport'])->name('assessment.cancel');
+
         Route::get('/template/{type?}', [ImportController::class, 'downloadTemplate'])->name('template');
-        Route::get('/errors', function() {
+        Route::get('/errors', function () {
             return view('import.errors', ['errors' => []]);
         })->name('errors');
     });

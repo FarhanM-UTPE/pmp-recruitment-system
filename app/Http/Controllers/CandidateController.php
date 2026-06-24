@@ -14,9 +14,9 @@ use App\Models\MPPSubmission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
 class CandidateController extends Controller
@@ -211,6 +211,7 @@ class CandidateController extends Controller
         'nama' => $validated['nama'],
         'alamat_email' => $validated['alamat_email'],
         'applicant_id' => $validated['applicant_id'],
+        'source' => 'Airsys',
         'jk' => $validated['jk'] ?? null,
         'tanggal_lahir' => $validated['tanggal_lahir'],
         'department_id' => $vacancy->department_id,
@@ -368,8 +369,17 @@ class CandidateController extends Controller
    */
   public function index(Request $request)
   {
-    $type = $request->input('type');
     $user = Auth::user();
+
+    // Default filter for department head: stage=user_interview
+    if ($user->hasRole('kepala departemen') && !$request->has('stage')) {
+      $queryParams = $request->query();
+      $queryParams['stage'] = 'user_interview';
+
+      return redirect()->route('candidates.index', $queryParams);
+    }
+
+    $type = $request->input('type');
 
     $hasFilters = $request->anyFilled(['year', 'vacancy_id', 'type', 'search', 'department_id', 'source', 'status', 'stage']) || $request->boolean('not_moved');
 
@@ -935,7 +945,18 @@ class CandidateController extends Controller
       ])
       ->get();
 
-    return view('candidates.show', compact('candidate', 'allTimelines', 'primaryApplication', 'activeVacancies'));
+    $assessmentScoreController = app(CandidateAssessmentScoreController::class);
+    $candidateAssessment = $assessmentScoreController->latestForCandidate($candidate);
+    $hasAssessmentScore = $assessmentScoreController->hasDisplayableScore($candidateAssessment);
+
+    return view('candidates.show', compact(
+      'candidate',
+      'allTimelines',
+      'primaryApplication',
+      'activeVacancies',
+      'candidateAssessment',
+      'hasAssessmentScore',
+    ));
   }
 
   /**
