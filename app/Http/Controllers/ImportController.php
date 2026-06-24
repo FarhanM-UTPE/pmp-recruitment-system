@@ -7,6 +7,7 @@ use App\Exports\CandidateTemplateExport;
 use App\Imports\CandidatesImport;
 use App\Jobs\ProcessCandidateImport;
 use App\Services\CandidateService;
+use App\Models\Candidate;
 use App\Models\Vacancy;
 use App\Models\ImportHistory;
 use Illuminate\Http\Request;
@@ -53,54 +54,100 @@ class ImportController extends Controller
         $fullPath = Storage::path($path);
 
         try {
-            $data = Excel::toArray(new \stdClass(), $fullPath);
-            $allRows = $data[0] ?? [];
-
-            if (count($allRows) <= 1) {
-                Storage::delete($path);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'File tidak memiliki data untuk diimpor.'
-                ]);
-            }
-
-            $headers = array_shift($allRows); // Get and remove header row
-            $mappedHeaders = $this->mapHeaders($headers);
-            $totalRows = count($allRows);
-
+            $importType = 'candidate';
+            $previewRows = [];
+            $mappedHeaders = [];
+            $totalRows = 0;
             $errors = [];
             $previewData = [];
-            $previewRowCount = 20; // We only validate the first N rows for preview
-            $rowsToValidate = array_slice($allRows, 0, $previewRowCount);
+            $previewRowCount = 20;
 
-            foreach ($rowsToValidate as $index => $row) {
-                // Skip empty rows
-                if (empty(array_filter($row))) {
-                    continue;
+            // Try to parse as assessment file first (3-tier header format).
+            $assessmentParsed = $this->parseAssessmentFile($fullPath);
+            $isAssessmentFormat = count($assessmentParsed['rows']) > 0
+                && in_array('applicant_id', $assessmentParsed['headers'], true)
+                && in_array('vacancy_title', $assessmentParsed['headers'], true);
+
+            if ($isAssessmentFormat) {
+                $importType = 'assessment_unified';
+                $totalRows = count($assessmentParsed['rows']);
+                $mappedHeaders = [
+                    'tahun_mpp',
+                    'id_pelamar',
+                    'nama',
+                    'alamat_email',
+                    'jenis_kelamin',
+                    'tanggal_lahir',
+                    'perguruan_tinggi',
+                    'jurusan',
+                    'source',
+                    'jabatan_dilamar',
+                    'psikotest_result',
+                    'test_date',
+                    'psikotes_notes',
+                ];
+
+                $previewRows = array_map(function (array $assessmentRow) {
+                    return $this->mapAssessmentToCandidateRow($assessmentRow);
+                }, $assessmentParsed['rows']);
+
+                foreach (array_slice($previewRows, 0, $previewRowCount, true) as $index => $rowData) {
+                    if (empty(array_filter($rowData))) {
+                        continue;
+                    }
+
+                    $rowIndex = $index + 2;
+                    $validationErrors = $this->validateRow($rowData, $rowIndex);
+                    if (!empty($validationErrors)) {
+                        $errors = array_merge($errors, $validationErrors);
+                    }
+
+                    if (count($previewData) < 5 && empty($validationErrors)) {
+                        $previewData[] = $rowData;
+                    }
+                }
+            } else {
+                $data = Excel::toArray(new \stdClass(), $fullPath);
+                $allRows = $data[0] ?? [];
+
+                if (count($allRows) <= 1) {
+                    Storage::delete($path);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'File tidak memiliki data untuk diimpor.'
+                    ]);
                 }
 
-                $rowData = array_combine($mappedHeaders, array_pad(array_slice($row, 0, count($mappedHeaders)), count($mappedHeaders), null));
-                $rowIndex = $index + 2; // Excel rows are 1-based, and we shifted headers
+                $headers = array_shift($allRows);
+                $mappedHeaders = $this->mapHeaders($headers);
+                $totalRows = count($allRows);
 
-                $validationErrors = $this->validateRow($rowData, $rowIndex); // Pass year to validateRow
-                if (!empty($validationErrors)) {
-                    $errors = array_merge($errors, $validationErrors);
-                }
+                foreach (array_slice($allRows, 0, $previewRowCount) as $index => $row) {
+                    if (empty(array_filter($row))) {
+                        continue;
+                    }
 
-                // Still collect up to 5 valid rows for the visual preview
-                if (count($previewData) < 5 && empty($validationErrors)) {
-                    $previewData[] = $rowData;
+                    $rowData = array_combine($mappedHeaders, array_pad(array_slice($row, 0, count($mappedHeaders)), count($mappedHeaders), null));
+                    $rowIndex = $index + 2;
+
+                    $validationErrors = $this->validateRow($rowData, $rowIndex);
+                    if (!empty($validationErrors)) {
+                        $errors = array_merge($errors, $validationErrors);
+                    }
+
+                    if (count($previewData) < 5 && empty($validationErrors)) {
+                        $previewData[] = $rowData;
+                    }
                 }
             }
 
-            // If validation of the first rows passes, cache the file path for final import
             Cache::put($fileId, [
                 'path' => $path,
                 'filename' => $file->getClientOriginalName(),
                 'row_count' => $totalRows,
+                'import_type' => $importType,
             ], now()->addHour());
 
-            // Even if there are errors, we return success: true, but provide the errors for display
             $message = "Validasi awal pada {$previewRowCount} baris pertama berhasil. {$totalRows} total baris akan diimpor.";
             if (!empty($errors)) {
                 $message = "Validasi awal selesai. Ditemukan beberapa masalah, baris tersebut akan dilewati saat import final. {$totalRows} total baris akan diimpor.";
@@ -110,10 +157,11 @@ class ImportController extends Controller
                 'success' => true,
                 'message' => $message,
                 'file_id' => $fileId,
-                'total_rows' => $totalRows, // Show total rows to the user
+                'total_rows' => $totalRows,
                 'preview' => $previewData,
                 'headers' => $mappedHeaders,
-                'errors' => $errors, // Always return errors, even if empty
+                'errors' => $errors,
+                'import_type' => $importType,
             ]);
 
         } catch (\Throwable $e) {
@@ -149,10 +197,12 @@ class ImportController extends Controller
             $filename = $cachedData['filename'];
             $totalRows = $cachedData['row_count'];
 
+            $importType = $cachedData['import_type'] ?? 'candidate';
+
             // Create import history record
             $importHistory = ImportHistory::create([
                 'user_id' => auth()->id(),
-                'filename' => $filename,
+                'filename' => $importType === 'assessment_unified' ? '[UNIFIED] ' . $filename : $filename,
                 'total_rows' => $totalRows,
                 'success_rows' => 0,
                 'failed_rows' => 0,
@@ -161,7 +211,7 @@ class ImportController extends Controller
             ]);
 
             // Dispatch the job asynchronously
-            ProcessCandidateImport::dispatch($path, auth()->id(), $importHistory->id)->delay(now()->addSeconds(2));
+            ProcessCandidateImport::dispatch($path, auth()->id(), $importHistory->id, $importType, $filename)->delay(now()->addSeconds(2));
 
             // Forget the cache key, the job will handle file deletion
             Cache::forget($fileId);
@@ -259,6 +309,22 @@ class ImportController extends Controller
 
         // 5. Duplicate check (only if all required fields are valid and no vacancy error)
         if (empty($errors)) {
+            $applicantId = trim((string) ($row['id_pelamar'] ?? $row['applicant_id'] ?? ''));
+            $email = trim((string) ($row['alamat_email'] ?? ''));
+
+            // If candidate already exists, this row should be treated as update, not duplicate.
+            $existingCandidate = null;
+            if ($applicantId !== '') {
+                $existingCandidate = Candidate::where('applicant_id', $applicantId)->first();
+            }
+            if (!$existingCandidate && $email !== '') {
+                $existingCandidate = Candidate::where('alamat_email', $email)->first();
+            }
+
+            if ($existingCandidate) {
+                return $errors;
+            }
+
             $birthDateValue = $row['tanggal_lahir'] ?? $row['tanggal lahir'] ?? null;
             $duplicateCheckData = [
                 'email' => $row['alamat_email'],
@@ -386,6 +452,176 @@ class ImportController extends Controller
             'year' => $year
         ]);
         return null;
+    }
+
+    private function mapAssessmentToCandidateRow(array $row): array
+    {
+        $vacancy = trim((string) ($row['vacancy_title'] ?? ''));
+        $vacancy = preg_replace('/\s*-\s*PMP\b/i', '', $vacancy);
+
+        return [
+            'tahun_mpp' => (string) now()->year,
+            'id_pelamar' => $row['applicant_id'] ?? null,
+            'nama' => $row['applicant_name'] ?? null,
+            'alamat_email' => $row['email'] ?? null,
+            'jenis_kelamin' => $row['gender'] ?? null,
+            'tanggal_lahir' => $row['date_of_birth'] ?? null,
+            'perguruan_tinggi' => $row['university'] ?? null,
+            'jurusan' => $row['major'] ?? null,
+            'source' => 'Airsys',
+            'jabatan_dilamar' => trim((string) $vacancy),
+            'psikotest_result' => $row['final_result_hasil_cut_off_score'] ?? null,
+            'test_date' => $row['test_date'] ?? null,
+            'psikotes_notes' => '-',
+        ];
+    }
+
+    private function parseAssessmentFile(string $fullPath): array
+    {
+        $data = Excel::toArray(new \stdClass(), $fullPath);
+        $sheet = $data[0] ?? [];
+
+        if (count($sheet) < 4) {
+            return ['headers' => [], 'rows' => []];
+        }
+
+        $maxCols = 0;
+        foreach ($sheet as $row) {
+            $maxCols = max($maxCols, count($row));
+        }
+
+        $headerRows = [
+            $this->fillForwardRow($sheet[0] ?? [], $maxCols),
+            $this->fillForwardRow($sheet[1] ?? [], $maxCols),
+            $this->fillForwardRow($sheet[2] ?? [], $maxCols),
+        ];
+
+        $headers = [];
+        $keptColumns = [];
+        $headerCounts = [];
+
+        for ($col = 0; $col < $maxCols; $col++) {
+            $lvl0 = $this->normalizeHeaderPart($headerRows[0][$col] ?? null);
+            $lvl1 = $this->normalizeHeaderPart($headerRows[1][$col] ?? null);
+            $lvl2 = $this->normalizeHeaderPart($headerRows[2][$col] ?? null);
+
+            $combined = trim(implode(' ', array_filter([$lvl0, $lvl1, $lvl2])));
+            if ($combined === '') {
+                $combined = 'Unnamed ' . $col;
+            }
+
+            $snake = $this->toSnakeCase($combined);
+            if ($snake === '') {
+                $snake = 'unnamed_' . $col;
+            }
+
+            if (
+                $snake !== 'final_result_hasil_cut_off_score'
+                && (str_contains($snake, 'cut_off_score') || str_contains($snake, 'hasil'))
+            ) {
+                continue;
+            }
+
+            if (isset($headerCounts[$snake])) {
+                $headerCounts[$snake]++;
+                $snake = $snake . '_' . $headerCounts[$snake];
+            } else {
+                $headerCounts[$snake] = 1;
+            }
+
+            $headers[] = $snake;
+            $keptColumns[$col] = $snake;
+        }
+
+        $rows = [];
+        for ($rowIndex = 3; $rowIndex < count($sheet); $rowIndex++) {
+            $row = $sheet[$rowIndex] ?? [];
+            $assoc = [];
+
+            foreach ($keptColumns as $colIndex => $headerName) {
+                $assoc[$headerName] = $this->normalizeCell($row[$colIndex] ?? null);
+            }
+
+            if ($this->isEmptyRow($assoc)) {
+                continue;
+            }
+
+            $assoc['__row_number'] = $rowIndex + 1;
+            $rows[] = $assoc;
+        }
+
+        return [
+            'headers' => $headers,
+            'rows' => $rows,
+        ];
+    }
+
+    private function fillForwardRow(array $row, int $maxCols): array
+    {
+        $filled = [];
+        $lastValue = null;
+
+        for ($i = 0; $i < $maxCols; $i++) {
+            $value = $row[$i] ?? null;
+            $value = $this->normalizeCell($value);
+
+            if ($value !== null && $value !== '') {
+                $lastValue = $value;
+            }
+
+            $filled[$i] = $value === null || $value === '' ? $lastValue : $value;
+        }
+
+        return $filled;
+    }
+
+    private function normalizeHeaderPart($value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        $text = trim((string) $value);
+        if ($text === '' || strtolower($text) === 'nan') {
+            return '';
+        }
+
+        return $text;
+    }
+
+    private function toSnakeCase(string $text): string
+    {
+        $cleanText = preg_replace('/[^a-zA-Z0-9]+/', '_', $text);
+        return strtolower(trim((string) $cleanText, '_'));
+    }
+
+    private function normalizeCell($value)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            return $trimmed === '' ? null : $trimmed;
+        }
+
+        return $value;
+    }
+
+    private function isEmptyRow(array $row): bool
+    {
+        foreach ($row as $key => $value) {
+            if ($key === '__row_number') {
+                continue;
+            }
+
+            if ($value !== null && $value !== '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function downloadTemplate($type = 'candidates')

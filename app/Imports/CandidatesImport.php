@@ -329,41 +329,60 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
             }
 
             // ================= UPSERT CANDIDATE =================
+            $existingCandidate = Candidate::where('applicant_id', $applicantId)->first();
+            $cvFromImport = isset($row['cv']) ? trim((string) $row['cv']) : '';
+            $flkFromImport = isset($row['flk']) ? trim((string) $row['flk']) : '';
+
             $candidate = Candidate::updateOrCreate(
                 ['applicant_id' => $applicantId],
                 [
                     'nama' => $name,
-                    'source' => $row['source'] ?? null,
-                    'jk' => $genderNormalized, // Use normalized gender
+                    'source' => $this->keepExistingIfEmpty($row['source'] ?? null, $existingCandidate?->source),
+                    'jk' => $this->keepExistingIfEmpty($genderNormalized, $existingCandidate?->jk), // Use normalized gender
                     'tanggal_lahir' => $birthDate,
-                    'alamat_email' => $row['email'] ?? null,
-                    'jenjang_pendidikan' => $row['jenjang_pendidikan'] ?? null,
-                    'perguruan_tinggi' => $row['perguruan_tinggi'] ?? null,
-                    'jurusan' => $row['jurusan'] ?? null,
-                    'ipk' => $row['ipk'] ?? null,
-                    'cv' => $row['cv'] ?? null,
-                    'flk' => $row['flk'] ?? null,
-                    'raw_department_name' => $rawDept,
-                    'department_id' => $departmentId,
-                    'mpp_year' => $mppYear,
-                    'airsys_internal' => $airsysInternal, // Set dynamically
+                    'alamat_email' => $this->keepExistingIfEmpty($row['email'] ?? null, $existingCandidate?->alamat_email),
+                    'jenjang_pendidikan' => $this->keepExistingIfEmpty($row['jenjang_pendidikan'] ?? null, $existingCandidate?->jenjang_pendidikan),
+                    'perguruan_tinggi' => $this->keepExistingIfEmpty($row['perguruan_tinggi'] ?? null, $existingCandidate?->perguruan_tinggi),
+                    'jurusan' => $this->keepExistingIfEmpty($row['jurusan'] ?? null, $existingCandidate?->jurusan),
+                    'ipk' => $this->keepExistingIfEmpty($row['ipk'] ?? null, $existingCandidate?->ipk),
+                    // Keep existing file path when import file does not provide CV/FLK columns.
+                    'cv' => $this->keepExistingIfEmpty($cvFromImport, $existingCandidate?->cv),
+                    'flk' => $this->keepExistingIfEmpty($flkFromImport, $existingCandidate?->flk),
+                    'raw_department_name' => $this->keepExistingIfEmpty($rawDept, $existingCandidate?->raw_department_name),
+                    'department_id' => $this->keepExistingIfEmpty($departmentId, $existingCandidate?->department_id),
+                    'mpp_year' => $this->keepExistingIfEmpty($mppYear, $existingCandidate?->mpp_year),
+                    'airsys_internal' => $this->keepExistingIfEmpty($airsysInternal, $existingCandidate?->airsys_internal), // Set dynamically
                     'status' => $candidateStatus,
                 ]
             );
 
             // ================= UPSERT APPLICATION & STAGE =================
-            // Vacancy already resolved above, just use it directly
-            $application = Application::updateOrCreate(
-                [
-                    'candidate_id' => $candidate->id,
-                    'vacancy_id' => $vacancy ? $vacancy->id : null,
-                    'mpp_year' => $mppYear,
-                ],
-                [
+            // If candidate already exists, keep existing vacancy (do not update from import vacancy_title).
+            $existingApplication = null;
+            if ($existingCandidate) {
+                $existingApplication = $candidate->applications()->latest('id')->first();
+            }
+
+            if ($existingApplication) {
+                $existingApplication->update([
                     'overall_status' => $overallStatus,
-                    'department_id' => $departmentId,
-                ]
-            );
+                    'department_id' => $existingApplication->department_id ?? $departmentId,
+                ]);
+                $application = $existingApplication;
+            } else {
+                // New candidate (or candidate with no application yet): use imported vacancy.
+                $application = Application::updateOrCreate(
+                    [
+                        'candidate_id' => $candidate->id,
+                        'vacancy_id' => $vacancy ? $vacancy->id : null,
+                        'mpp_year' => $mppYear,
+                    ],
+                    [
+                        'overall_status' => $overallStatus,
+                        'department_id' => $departmentId,
+                    ]
+                );
+            }
 
             Log::info('CandidatesImport: Application processed', [
                 'row' => $rowIndex,
@@ -475,6 +494,19 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
     public function getProcessedCount(): int
     {
         return $this->processed;
+    }
+
+    private function keepExistingIfEmpty($importedValue, $existingValue)
+    {
+        if (is_null($importedValue)) {
+            return $existingValue;
+        }
+
+        if (is_string($importedValue) && trim($importedValue) === '') {
+            return $existingValue;
+        }
+
+        return $importedValue;
     }
 
     public function getSkippedCount(): int
