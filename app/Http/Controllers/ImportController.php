@@ -107,38 +107,47 @@ class ImportController extends Controller
                     }
                 }
             } else {
-                $data = Excel::toArray(new \stdClass(), $fullPath);
-                $allRows = $data[0] ?? [];
+                // Legacy candidate-template preview flow intentionally disabled.
+                // Kept here for reference per request.
+                // $data = Excel::toArray(new \stdClass(), $fullPath);
+                // $allRows = $data[0] ?? [];
+                //
+                // if (count($allRows) <= 1) {
+                //     Storage::delete($path);
+                //     return response()->json([
+                //         'success' => false,
+                //         'message' => 'File tidak memiliki data untuk diimpor.'
+                //     ]);
+                // }
+                //
+                // $headers = array_shift($allRows);
+                // $mappedHeaders = $this->mapHeaders($headers);
+                // $totalRows = count($allRows);
+                //
+                // foreach (array_slice($allRows, 0, $previewRowCount) as $index => $row) {
+                //     if (empty(array_filter($row))) {
+                //         continue;
+                //     }
+                //
+                //     $rowData = array_combine($mappedHeaders, array_pad(array_slice($row, 0, count($mappedHeaders)), count($mappedHeaders), null));
+                //     $rowIndex = $index + 2;
+                //
+                //     $validationErrors = $this->validateRow($rowData, $rowIndex);
+                //     if (!empty($validationErrors)) {
+                //         $errors = array_merge($errors, $validationErrors);
+                //     }
+                //
+                //     if (count($previewData) < 5 && empty($validationErrors)) {
+                //         $previewData[] = $rowData;
+                //     }
+                // }
 
-                if (count($allRows) <= 1) {
-                    Storage::delete($path);
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'File tidak memiliki data untuk diimpor.'
-                    ]);
-                }
+                Storage::delete($path);
 
-                $headers = array_shift($allRows);
-                $mappedHeaders = $this->mapHeaders($headers);
-                $totalRows = count($allRows);
-
-                foreach (array_slice($allRows, 0, $previewRowCount) as $index => $row) {
-                    if (empty(array_filter($row))) {
-                        continue;
-                    }
-
-                    $rowData = array_combine($mappedHeaders, array_pad(array_slice($row, 0, count($mappedHeaders)), count($mappedHeaders), null));
-                    $rowIndex = $index + 2;
-
-                    $validationErrors = $this->validateRow($rowData, $rowIndex);
-                    if (!empty($validationErrors)) {
-                        $errors = array_merge($errors, $validationErrors);
-                    }
-
-                    if (count($previewData) < 5 && empty($validationErrors)) {
-                        $previewData[] = $rowData;
-                    }
-                }
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Template lama tidak didukung. Gunakan file assessment terbaru yang memiliki nilai assessment.',
+                ], 422);
             }
 
             Cache::put($fileId, [

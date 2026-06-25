@@ -165,10 +165,14 @@ class CandidateService
         if ($request->hasFile('cv')) {
             // TODO: Delete old file if it exists
             $validatedData['cv'] = $request->file('cv')->store('private/cvs');
+        } elseif (array_key_exists('cv', $validatedData) && is_null($validatedData['cv'])) {
+            unset($validatedData['cv']);
         }
         if ($request->hasFile('flk')) {
             // TODO: Delete old file if it exists
             $validatedData['flk'] = $request->file('flk')->store('private/flks');
+        } elseif (array_key_exists('flk', $validatedData) && is_null($validatedData['flk'])) {
+            unset($validatedData['flk']);
         }
 
         $candidate->update($validatedData);
