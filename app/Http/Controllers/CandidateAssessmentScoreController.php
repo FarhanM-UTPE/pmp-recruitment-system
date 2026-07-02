@@ -18,6 +18,9 @@ class CandidateAssessmentScoreController extends Controller
 
         return CandidateAssessmentResult::query()
             ->where('applicant_id', $candidate->applicant_id)
+            ->where('assessment_type', 'psychotest')
+            ->orderByDesc('imported_at')
+            ->orderByDesc('updated_at')
             ->orderByDesc('test_date')
             ->orderByDesc('id')
             ->first();
