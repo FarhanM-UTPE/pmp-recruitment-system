@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,
             UserSeeder::class,
             DepartmentUsersSeeder::class,
+            DivisionHeadAccountsSeeder::class,
             VacancySeeder::class,
             MPPPermissionSeeder::class,  // MPP permissions & role assignments
             MasterDataSeeder::class,

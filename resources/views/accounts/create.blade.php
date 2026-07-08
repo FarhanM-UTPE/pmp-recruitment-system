@@ -61,13 +61,31 @@
                                     required>
                             </div>
 
+                            {{-- Nama Penandatangan Approval --}}
+                            <div>
+                                <label for="approval_display_name" class="block text-sm font-medium text-gray-700">Nama Penandatangan (Approval)</label>
+                                <input type="text" name="approval_display_name" id="approval_display_name" value="{{ old('approval_display_name') }}"
+                                    class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                    placeholder="Contoh: Budi Santoso">
+                                <p class="text-xs text-gray-500 mt-1">Jika diisi, nama ini akan dipakai di matrix approval MPP.</p>
+                            </div>
+
+                            {{-- Nama Divisi --}}
+                            <div id="division-name-field" style="display: none;">
+                                <label for="division_name" class="block text-sm font-medium text-gray-700">Nama Divisi *</label>
+                                <input type="text" name="division_name" id="division_name" value="{{ old('division_name') }}"
+                                    class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                    placeholder="Contoh: Marketing & Sales">
+                                <p class="text-xs text-gray-500 mt-1">Wajib diisi untuk role Division Head.</p>
+                            </div>
+
                             {{-- NRP --}}
                             <div>
                                 <label for="nrp" class="block text-sm font-medium text-gray-700">NRP</label>
                                 <input type="text" name="nrp" id="nrp" value="{{ old('nrp') }}"
                                     class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                                     placeholder="Contoh: 1234">
-                                <p class="text-xs text-gray-500 mt-1">Wajib diisi jika role Kepala Departemen.</p>
+                                <p class="text-xs text-gray-500 mt-1">Wajib diisi jika role Kepala Departemen atau Division Head.</p>
                             </div>
 
                             {{-- Password --}}
@@ -100,6 +118,12 @@
                                                 Administrator
                                             @elseif($role->name === 'team_hc')
                                                 Team HC
+                                            @elseif($role->name === 'team_hc_2')
+                                                Team HC 2
+                                            @elseif($role->name === 'kepala departemen')
+                                                Kepala Departemen
+                                            @elseif($role->name === 'division_head')
+                                                Division Head
                                             @else
                                                 {{ ucfirst(str_replace('_', ' ', $role->name)) }}
                                             @endif
@@ -119,6 +143,29 @@
                                             {{ $dept->name }}</option>
                                     @endforeach
                                 </select>
+                            </div>
+
+                            {{-- Multi Department Access --}}
+                            <div id="division-departments-field" class="col-span-1 md:col-span-2">
+                                <label for="accessible_department_ids" class="block text-sm font-medium text-gray-700">Akses Departemen</label>
+                                @php
+                                    $selectedAccessibleDepartments = old('accessible_department_ids', []);
+                                @endphp
+                                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 border border-gray-300 rounded-lg p-3 bg-white">
+                                    @foreach($departments as $dept)
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                            <input
+                                                type="checkbox"
+                                                name="accessible_department_ids[]"
+                                                value="{{ $dept->id }}"
+                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                {{ in_array($dept->id, $selectedAccessibleDepartments) ? 'checked' : '' }}
+                                            >
+                                            <span>{{ $dept->name }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Pilih satu atau lebih departemen. Untuk Kepala Departemen, sistem akan mengikuti departemen utama.</p>
                             </div>
 
                             {{-- Status --}}
@@ -181,20 +228,44 @@
             const roleSelect = document.getElementById('role');
             const departmentField = document.getElementById('department-field');
             const departmentSelect = document.getElementById('department_id');
+            const divisionNameField = document.getElementById('division-name-field');
+            const divisionNameInput = document.getElementById('division_name');
+            const divisionDepartmentsField = document.getElementById('division-departments-field');
             const nrpInput = document.getElementById('nrp');
 
             function toggleDepartmentField() {
                 const selectedRole = roleSelect.value;
 
-                // Hanya tampilkan field departemen untuk role 'kepala departemen'
                 if (selectedRole === 'kepala departemen') {
                     departmentField.style.display = 'block';
                     departmentSelect.setAttribute('required', 'required');
+
+                    divisionNameField.style.display = 'none';
+                    divisionNameInput.removeAttribute('required');
+                    divisionNameInput.value = '';
+                    divisionDepartmentsField.style.display = 'block';
+
+                    nrpInput.setAttribute('required', 'required');
+                } else if (selectedRole === 'division_head') {
+                    departmentField.style.display = 'none';
+                    departmentSelect.removeAttribute('required');
+                    departmentSelect.value = '';
+
+                    divisionNameField.style.display = 'block';
+                    divisionNameInput.setAttribute('required', 'required');
+                    divisionDepartmentsField.style.display = 'block';
+
                     nrpInput.setAttribute('required', 'required');
                 } else {
                     departmentField.style.display = 'none';
                     departmentSelect.removeAttribute('required');
                     departmentSelect.value = ''; // Clear selection
+
+                    divisionNameField.style.display = 'none';
+                    divisionNameInput.removeAttribute('required');
+                    divisionNameInput.value = '';
+                    divisionDepartmentsField.style.display = 'block';
+
                     nrpInput.removeAttribute('required');
                 }
             }

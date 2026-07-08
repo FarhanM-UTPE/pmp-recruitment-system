@@ -22,12 +22,12 @@
                     <p class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['team_hc'] ?? 0 }}</p>
                 </div>
                 <div class="bg-white rounded-xl p-5 border border-gray-200">
-                    <p class="text-sm font-medium text-gray-500">User</p>
-                    <p class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['user'] ?? 0 }}</p>
+                    <p class="text-sm font-medium text-gray-500">Team HC 2</p>
+                    <p class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['team_hc_2'] ?? 0 }}</p>
                 </div>
                 <div class="bg-white rounded-xl p-5 border border-gray-200">
-                    <p class="text-sm font-medium text-gray-500">Department</p>
-                    <p class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['department'] ?? 0 }}</p>
+                    <p class="text-sm font-medium text-gray-500">Division Head</p>
+                    <p class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['division_head'] ?? 0 }}</p>
                 </div>
             </div>
 
@@ -54,6 +54,7 @@
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pengguna</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Divisi</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departemen</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal Dibuat</th>
@@ -76,7 +77,21 @@
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ $user->role_display_name }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $user->department ?? '-' }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $user->division_name ?? '-' }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600">
+                                    <div>{{ $user->department?->name ?? '-' }}</div>
+                                    @php
+                                        $departmentNames = collect($user->accessible_department_ids ?? [])
+                                            ->map(fn($id) => $departmentsMap[$id] ?? null)
+                                            ->filter()
+                                            ->values();
+                                    @endphp
+                                    @if($departmentNames->isNotEmpty())
+                                        <div class="text-xs text-gray-500 mt-1">
+                                            Akses: {{ $departmentNames->implode(', ') }}
+                                        </div>
+                                    @endif
+                                </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     @if($user->status)
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Aktif</span>
@@ -106,7 +121,7 @@
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="6" class="text-center py-12">
+                                <td colspan="7" class="text-center py-12">
                                     <i class="fas fa-users text-4xl text-gray-300 mb-4"></i>
                                     <p class="text-gray-500">Belum ada data akun.</p>
                                 </td>
