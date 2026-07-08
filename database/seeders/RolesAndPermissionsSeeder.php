@@ -26,14 +26,14 @@ class RolesAndPermissionsSeeder extends Seeder
         $permissions = [
             // Dashboard access
             'view-dashboard',
-            
+
             // User/Account management
             'manage-users',
             'view-users',
             'create-users',
             'edit-users',
             'delete-users',
-            
+
             // Candidate management
             'view-candidates',
             'view-own-department-candidates',
@@ -41,35 +41,35 @@ class RolesAndPermissionsSeeder extends Seeder
             'edit-candidates',
             'show-candidates',
             'delete-candidates',
-            
+
             // Import/Export functionality
             'import-excel',
             'export-candidates',
             'download-template',
-            
+
             // Bulk operations
             'bulk-update-candidates',
             'bulk-delete-candidates',
             'bulk-export-candidates',
             'bulk-move-stage',
             'bulk-switch-type',
-            
+
             // Stage management
             'update-stage',
             'move-stage',
             'edit-timeline',
-            
+
             // Statistics and reports
             'view-statistics',
             'view-reports',
-            
+
             // Events/Calendar management
             'view-events',
             'create-events',
             'edit-events',
             'delete-events',
             'manage-calendar',
-            
+
             // Duplicate management
             'manage-duplicates',
             'mark-duplicate',
@@ -115,6 +115,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $teamHCRole = Role::firstOrCreate(['name' => 'team_hc']);
         $teamHC2Role = Role::firstOrCreate(['name' => 'team_hc_2']);
         $kepalaDepartemenRole = Role::firstOrCreate(['name' => 'kepala departemen']);
+        $divisionHeadRole = Role::firstOrCreate(['name' => 'division_head']);
 
         // ============================================
         // 1. ADMIN - Manajemen sistem & user saja
@@ -250,6 +251,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view-events',
             // MPP permissions for document upload
             'view-mpp-submissions',
+            'create-mpp-submission',
+            'submit-mpp-submission',
             'view-mpp-submission-details',
             'upload-vacancy-document',
             'download-vacancy-document',
@@ -257,6 +260,7 @@ class RolesAndPermissionsSeeder extends Seeder
         ];
 
         $kepalaDepartemenRole->syncPermissions($departmentHeadPermissions);
+        $divisionHeadRole->syncPermissions($departmentHeadPermissions);
 
         // Output seeding information
         $this->command->info('✅ Roles and permissions seeded successfully:');
@@ -264,6 +268,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $this->command->info('   2. team_hc - Tim HC utama (full access)');
         $this->command->info('   3. team_hc_2 - Tim HC kedua (same as team_hc, approval step 2)');
         $this->command->info('   4. kepala departemen - Kepala departemen (own dept only)');
+        $this->command->info('   5. division_head - Division Head (multi department scope)');
         $this->command->info('   Total permissions: ' . Permission::count());
     }
 }

@@ -43,6 +43,7 @@ class MPPPermissionSeeder extends Seeder
         // Get roles
         $teamHCRole = Role::firstOrCreate(['name' => 'team_hc']);
         $kepalaDepartemenRole = Role::firstOrCreate(['name' => 'kepala departemen']);
+        $divisionHeadRole = Role::firstOrCreate(['name' => 'division_head']);
 
         // Grant Team HC permissions for MPP management
         $teamHCRole->givePermissionTo([
@@ -61,6 +62,18 @@ class MPPPermissionSeeder extends Seeder
         // Grant Department Head permissions for document upload
         $kepalaDepartemenRole->givePermissionTo([
             'view-mpp-submissions',
+            'create-mpp-submission',
+            'submit-mpp-submission',
+            'view-mpp-submission-details',
+            'upload-vacancy-document',
+            'download-vacancy-document',
+            'delete-vacancy-document',
+        ]);
+
+        $divisionHeadRole->givePermissionTo([
+            'view-mpp-submissions',
+            'create-mpp-submission',
+            'submit-mpp-submission',
             'view-mpp-submission-details',
             'upload-vacancy-document',
             'download-vacancy-document',

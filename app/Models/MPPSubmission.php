@@ -24,6 +24,28 @@ class MPPSubmission extends Model
         'department_id',
         'year', // Added year to fillable
         'submission_type',
+        'form_version',
+        'vacancy_id',
+        'custom_jabatan_name',
+        'golongan',
+        'status_pegawai',
+        'lokasi_pekerjaan',
+        'tanggal_mulai_bekerja',
+        'jumlah_diminta',
+        'alasan_penambahan_manpower',
+        'nama_karyawan_diganti',
+        'tanggal_keluar',
+        'alasan_penggantian',
+        'jumlah_karyawan_ada',
+        'kesesuaian_man_power_plan',
+        'alasan_kesesuaian',
+        'pendidikan_requirements',
+        'keahlian_khusus',
+        'jenis_kelamin',
+        'status_perkawinan',
+        'pengalaman_kerja',
+        'uraian_jabatan',
+        'fasilitas_dibutuhkan',
         'status',
         'submitted_at',
         'approved_at',
@@ -32,6 +54,12 @@ class MPPSubmission extends Model
     ];
 
     protected $casts = [
+        'status_pegawai' => 'array',
+        'tanggal_mulai_bekerja' => 'date',
+        'tanggal_keluar' => 'date',
+        'pendidikan_requirements' => 'array',
+        'uraian_jabatan' => 'array',
+        'fasilitas_dibutuhkan' => 'array',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
@@ -51,6 +79,14 @@ class MPPSubmission extends Model
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    /**
+     * Get selected vacancy for new form submissions.
+     */
+    public function vacancy(): BelongsTo
+    {
+        return $this->belongsTo(Vacancy::class);
     }
 
     /**
@@ -76,6 +112,15 @@ class MPPSubmission extends Model
     public function approvalHistories(): HasMany
     {
         return $this->hasMany(MPPApprovalHistory::class, 'mpp_submission_id', 'id');
+    }
+
+    /**
+     * Get normalized approval stages for new-form submissions.
+     */
+    public function approvalStages(): HasMany
+    {
+        return $this->hasMany(MPPSubmissionApprovalStage::class, 'mpp_submission_id', 'id')
+            ->orderBy('stage_index');
     }
 
     /**

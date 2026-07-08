@@ -21,11 +21,13 @@ class DashboardController extends Controller
     {
         $year = $request->get('year', date('Y'));
         $user = Auth::user();
+        $isDepartmentScopedRole = $user->hasAnyRole(['kepala departemen', 'division_head']);
+        $accessibleDepartmentIds = $user->getAccessibleDepartmentIds();
 
         $baseQuery = Application::query();
-        if ($user->hasRole('kepala departemen')) {
-            $baseQuery->whereHas('candidate', function ($query) use ($user) {
-                $query->where('department_id', $user->department_id);
+        if ($isDepartmentScopedRole) {
+            $baseQuery->whereHas('candidate', function ($query) use ($accessibleDepartmentIds) {
+                $query->whereIn('department_id', $accessibleDepartmentIds);
             });
         }
 
@@ -93,8 +95,8 @@ class DashboardController extends Controller
             ->when($year, function ($q) use ($year) {
                 return $q->where('year', $year);
             })
-            ->when($user->hasRole('kepala departemen') && $user->department_id, function ($q) use ($user) {
-                return $q->where('department_id', $user->department_id);
+            ->when($isDepartmentScopedRole && !empty($accessibleDepartmentIds), function ($q) use ($accessibleDepartmentIds) {
+                return $q->whereIn('department_id', $accessibleDepartmentIds);
             })
             ->sum('value');
 
@@ -106,8 +108,8 @@ class DashboardController extends Controller
             ->when($year, function ($q) use ($year) {
                 return $q->where('year', $year);
             })
-            ->when($user->hasRole('kepala departemen') && $user->department_id, function ($q) use ($user) {
-                return $q->where('department_id', $user->department_id);
+            ->when($isDepartmentScopedRole && !empty($accessibleDepartmentIds), function ($q) use ($accessibleDepartmentIds) {
+                return $q->whereIn('department_id', $accessibleDepartmentIds);
             })
             ->sum('value');
 
@@ -118,8 +120,8 @@ class DashboardController extends Controller
             ->when($year, function ($q) use ($year) {
                 return $q->where('year', $year);
             })
-            ->when($user->hasRole('kepala departemen') && $user->department_id, function ($q) use ($user) {
-                return $q->where('department_id', $user->department_id);
+            ->when($isDepartmentScopedRole && !empty($accessibleDepartmentIds), function ($q) use ($accessibleDepartmentIds) {
+                return $q->whereIn('department_id', $accessibleDepartmentIds);
             })
             ->sum('value');
 
@@ -137,8 +139,8 @@ class DashboardController extends Controller
         $recentCandidatesQuery = Candidate::with('department', 'applications.vacancy')
             ->orderBy('created_at', 'desc')
             ->limit(5);
-        if ($user->hasRole('kepala departemen')) {
-            $recentCandidatesQuery->where('department_id', $user->department_id);
+        if ($isDepartmentScopedRole) {
+            $recentCandidatesQuery->whereIn('department_id', $accessibleDepartmentIds);
         }
 
         $oldestCandidateQuery = Candidate::select('candidates.*')
@@ -161,17 +163,17 @@ class DashboardController extends Controller
             $oldestCandidateQuery->where('department_id', $request->oldest_dept);
         }
         // Otherwise, fallback to the default role restriction
-        elseif ($user->hasRole('kepala departemen')) {
-            $oldestCandidateQuery->where('department_id', $user->department_id);
+        elseif ($isDepartmentScopedRole) {
+            $oldestCandidateQuery->whereIn('department_id', $accessibleDepartmentIds);
         }
 
         $oldest_candidates = $oldestCandidateQuery->get();
         $recent_candidates = $recentCandidatesQuery->get();
 
-        $distributionQuery = ApplicationStage::whereIn('id', function ($query) use ($year, $user) {
+        $distributionQuery = ApplicationStage::whereIn('id', function ($query) use ($year, $isDepartmentScopedRole, $accessibleDepartmentIds) {
             $query->select(DB::raw('MAX(id)'))
                 ->from('application_stages')
-                ->whereIn('application_id', function ($sub) use ($year, $user) {
+                ->whereIn('application_id', function ($sub) use ($year, $isDepartmentScopedRole, $accessibleDepartmentIds) {
                     $sub->select('id')
                         ->from('applications')
                         ->where('overall_status', 'PROSES');
@@ -180,11 +182,11 @@ class DashboardController extends Controller
                         $sub->where('mpp_year', $year);
                     }
 
-                    if ($user->hasRole('kepala departemen')) {
-                        $sub->whereIn('candidate_id', function ($csub) use ($user) {
+                    if ($isDepartmentScopedRole) {
+                        $sub->whereIn('candidate_id', function ($csub) use ($accessibleDepartmentIds) {
                             $csub->select('id')
                                 ->from('candidates')
-                                ->where('department_id', $user->department_id);
+                                ->whereIn('department_id', $accessibleDepartmentIds);
                         });
                     }
                 })
@@ -368,6 +370,8 @@ class DashboardController extends Controller
     public function getCalendarEvents(Request $request)
     {
         $user = Auth::user();
+        $isDepartmentScopedRole = $user->hasAnyRole(['kepala departemen', 'division_head']);
+        $accessibleDepartmentIds = $user->getAccessibleDepartmentIds();
         $events = [];
 
         // Get only PENDING/IN-PROGRESS scheduled stages for each application
@@ -383,9 +387,9 @@ class DashboardController extends Controller
             ->whereDate('scheduled_date', '>=', now()->startOfYear())
             ->whereDate('scheduled_date', '<=', now()->addYear()->endOfYear());
 
-        if ($user->hasRole('kepala departemen')) {
-            $stagesQuery->whereHas('application.candidate', function ($q) use ($user) {
-                $q->where('department_id', $user->department_id);
+        if ($isDepartmentScopedRole) {
+            $stagesQuery->whereHas('application.candidate', function ($q) use ($accessibleDepartmentIds) {
+                $q->whereIn('department_id', $accessibleDepartmentIds);
             });
         }
 
@@ -429,8 +433,8 @@ class DashboardController extends Controller
             ->whereDate('date', '>=', now()->startOfYear())
             ->whereDate('date', '<=', now()->addYear()->endOfYear());
 
-        if ($user->hasRole('kepala departemen')) {
-            $customEventsQuery->where('department_id', $user->department_id);
+        if ($isDepartmentScopedRole) {
+            $customEventsQuery->whereIn('department_id', $accessibleDepartmentIds);
         }
 
         $customEvents = $customEventsQuery->get();
@@ -463,15 +467,17 @@ class DashboardController extends Controller
     {
         $year = $request->get('year', date('Y'));
         $user = Auth::user();
+        $isDepartmentScopedRole = $user->hasAnyRole(['kepala departemen', 'division_head']);
+        $accessibleDepartmentIds = $user->getAccessibleDepartmentIds();
         $query = Application::query();
 
         if ($year) {
             $query->where('mpp_year', $year);
         }
 
-        if ($user->hasRole('kepala departemen')) {
-            $query->whereHas('candidate', function ($cq) use ($user) {
-                $cq->where('department_id', $user->department_id);
+        if ($isDepartmentScopedRole) {
+            $query->whereHas('candidate', function ($cq) use ($accessibleDepartmentIds) {
+                $cq->whereIn('department_id', $accessibleDepartmentIds);
             });
         }
 

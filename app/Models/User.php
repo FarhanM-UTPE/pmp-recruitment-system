@@ -60,16 +60,38 @@ class User extends Authenticatable
     use HasFactory, Notifiable, HasRoles;
 
     /**
+     * Preferred role order for UI display.
+     * Highest priority appears first.
+     *
+     * @var array<int, string>
+     */
+    private const ROLE_DISPLAY_PRIORITY = [
+        'executive',
+        'dic_approver',
+        'hcd_div_head',
+        'hcd_dept_head',
+        'pic_recruitment',
+        'division_head',
+        'kepala departemen',
+        'team_hc_2',
+        'team_hc',
+        'admin',
+    ];
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>
      */
     protected $fillable = [
         'name',
+        'approval_display_name',
+        'division_name',
         'email',
         'nrp',
         'password',
         'department_id',
+        'accessible_department_ids',
         'status',
     ];
 
@@ -94,6 +116,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'status' => 'boolean',
+            'accessible_department_ids' => 'array',
         ];
     }
 
@@ -123,7 +146,29 @@ class User extends Authenticatable
      */
     public function getRoleDisplayNameAttribute(): string
     {
-        if ($this->hasRole('department')) {
+        $primaryRole = $this->primary_role;
+
+        $roleDisplay = [
+            'executive' => 'Executive',
+            'dic_approver' => 'DIC Approver',
+            'hcd_div_head' => 'HCD Div. Head',
+            'hcd_dept_head' => 'HCD Dept. Head',
+            'pic_recruitment' => 'PIC Recruitment',
+            'division_head' => 'Division Head',
+            'kepala departemen' => 'Kepala Departemen',
+            'team_hc' => 'Team HC',
+            'team_hc_2' => 'Team HC 2',
+            'admin' => 'Administrator',
+        ];
+
+        if (isset($roleDisplay[$primaryRole])) {
+            return $roleDisplay[$primaryRole];
+        }
+
+        if ($this->hasRole('division_head')) {
+            return 'Division Head';
+        }
+        if ($this->hasRole('kepala departemen')) {
             return 'Kepala Departemen';
         }
         if ($this->hasRole('team_hc')) {
@@ -145,7 +190,15 @@ class User extends Authenticatable
      */
     public function getPrimaryRoleAttribute()
     {
-        return $this->getRoleNames()->first() ?? 'N/A';
+        $roles = $this->getRoleNames();
+
+        foreach (self::ROLE_DISPLAY_PRIORITY as $roleName) {
+            if ($roles->contains($roleName)) {
+                return $roleName;
+            }
+        }
+
+        return $roles->first() ?? 'N/A';
     }
 
     /**
@@ -158,7 +211,9 @@ class User extends Authenticatable
         $roleNames = [
             'admin' => 'Administrator',
             'team_hc' => 'Team HC',
-            'department' => 'Kepala Departemen',
+            'team_hc_2' => 'Team HC 2',
+            'kepala departemen' => 'Kepala Departemen',
+            'division_head' => 'Division Head',
         ];
 
         return $roleNames[$primaryRole] ?? ucfirst(str_replace('_', ' ', $primaryRole));
@@ -174,7 +229,9 @@ class User extends Authenticatable
         $badgeClasses = [
             'admin' => 'bg-red-100 text-red-800',
             'team_hc' => 'bg-blue-100 text-blue-800',
-            'department' => 'bg-green-100 text-green-800',
+            'team_hc_2' => 'bg-indigo-100 text-indigo-800',
+            'kepala departemen' => 'bg-green-100 text-green-800',
+            'division_head' => 'bg-amber-100 text-amber-800',
         ];
 
         return $badgeClasses[$primaryRole] ?? 'bg-gray-100 text-gray-800';
@@ -186,5 +243,42 @@ class User extends Authenticatable
     public function getStatusBadgeClassAttribute()
     {
         return $this->status ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+    }
+
+    /**
+     * Name to be shown in approval/signature matrix.
+     */
+    public function getApprovalSignerNameAttribute(): string
+    {
+        return trim((string) ($this->approval_display_name ?: $this->name));
+    }
+
+    /**
+     * Return all department IDs accessible by this user.
+     * Falls back to single department_id for legacy accounts.
+     *
+     * @return array<int>
+     */
+    public function getAccessibleDepartmentIds(): array
+    {
+        $ids = collect($this->accessible_department_ids ?? [])
+            ->filter(fn($id) => is_numeric($id))
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty() && $this->department_id) {
+            return [(int) $this->department_id];
+        }
+
+        return $ids->all();
+    }
+
+    /**
+     * Check whether user can access a department.
+     */
+    public function hasDepartmentAccess(int $departmentId): bool
+    {
+        return in_array($departmentId, $this->getAccessibleDepartmentIds(), true);
     }
 }

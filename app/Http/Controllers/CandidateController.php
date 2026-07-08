@@ -148,18 +148,46 @@ class CandidateController extends Controller
 
   public function create()
   {
-    // Eager load 'mppSubmissions' alongside the 'whereHas' filter
-    $vacancies = Vacancy::whereHas('mppSubmissions', function ($q) {
-      $q->where('proposal_status', 'approved');
+    // Include vacancies approved through both old-form (pivot) and new-form (direct vacancy_id) MPP flows.
+    $vacancies = Vacancy::where(function ($query) {
+      $query->whereHas('mppSubmissions', function ($q) {
+        $q->where('proposal_status', 'approved')
+          ->whereNull('mpp_submissions.deleted_at');
+      })->orWhereHas('directMppSubmissions', function ($q) {
+        $q->where('status', MPPSubmission::STATUS_APPROVED)
+          ->where('form_version', 'new')
+          ->whereNull('deleted_at');
+      });
     })
       ->with([
         'mppSubmissions' => function ($q) {
-          // Ensure we only load the approved ones into the JSON array
-          $q->where('proposal_status', 'approved');
-        }
+          $q->where('proposal_status', 'approved')
+            ->whereNull('mpp_submissions.deleted_at');
+        },
+        'directMppSubmissions' => function ($q) {
+          $q->where('status', MPPSubmission::STATUS_APPROVED)
+            ->where('form_version', 'new')
+            ->whereNull('deleted_at');
+        },
       ])
       ->orderBy('name')
       ->get();
+
+    $vacancies->each(function ($vacancy) {
+      $oldSubmissions = collect($vacancy->mppSubmissions ?? []);
+      $newSubmissions = collect($vacancy->directMppSubmissions ?? []);
+
+      $mergedSubmissions = $oldSubmissions
+        ->concat($newSubmissions)
+        ->sortByDesc('year')
+        ->unique(function ($item) {
+          return (string) data_get($item, 'year') . '|' . (string) data_get($item, 'submission_type');
+        })
+        ->values();
+
+      $vacancy->setRelation('mppSubmissions', $mergedSubmissions);
+      $vacancy->unsetRelation('directMppSubmissions');
+    });
 
     $departments = Department::orderBy('name')->get();
 
@@ -204,6 +232,16 @@ class CandidateController extends Controller
         if ($mppSubmission) {
           $vacancyStatus = $mppSubmission->pivot->vacancy_status;
           $airsysInternal = ($vacancyStatus === 'OSPKWT') ? 'Yes' : (($vacancyStatus === 'OS') ? 'No' : null);
+        } else {
+          $newFormMpp = $vacancy->directMppSubmissions()
+            ->where('year', $validated['mpp_year'])
+            ->where('status', MPPSubmission::STATUS_APPROVED)
+            ->where('form_version', 'new')
+            ->first();
+
+          if ($newFormMpp) {
+            $airsysInternal = $newFormMpp->submission_type === 'planned' ? 'Yes' : 'No';
+          }
         }
       }
 
@@ -261,8 +299,15 @@ class CandidateController extends Controller
    */
   public function edit(Candidate $candidate)
   {
-    $vacancies = Vacancy::whereHas('mppSubmissions', function ($q) {
-      $q->where('proposal_status', 'approved');
+    $vacancies = Vacancy::where(function ($query) {
+      $query->whereHas('mppSubmissions', function ($q) {
+        $q->where('proposal_status', 'approved')
+          ->whereNull('mpp_submissions.deleted_at');
+      })->orWhereHas('directMppSubmissions', function ($q) {
+        $q->where('status', MPPSubmission::STATUS_APPROVED)
+          ->where('form_version', 'new')
+          ->whereNull('deleted_at');
+      });
     })->orderBy('name')->get();
     $departments = Department::orderBy('name')->get();
     $editHistories = $candidate->editHistories()->with('user')->orderBy('created_at', 'desc')->get();
@@ -371,8 +416,8 @@ class CandidateController extends Controller
   {
     $user = Auth::user();
 
-    // Default filter for department head: stage=user_interview
-    if ($user->hasRole('kepala departemen') && !$request->has('stage')) {
+    // Default filter for department scoped roles: stage=user_interview
+    if ($user->hasAnyRole(['kepala departemen', 'division_head']) && !$request->has('stage')) {
       $queryParams = $request->query();
       $queryParams['stage'] = 'user_interview';
 
@@ -410,10 +455,11 @@ class CandidateController extends Controller
       $statsQuery->where('applications.mpp_year', $selectedYear);
     }
 
-    if ($user->hasRole('kepala departemen') && $user->department_id) {
-      $query->where('candidates.department_id', $user->department_id);
-      $statsQuery->whereHas('candidate', function ($q) use ($user) {
-        $q->where('department_id', $user->department_id);
+    if ($user->hasAnyRole(['kepala departemen', 'division_head'])) {
+      $accessibleDepartmentIds = $user->getAccessibleDepartmentIds();
+      $query->whereIn('candidates.department_id', $accessibleDepartmentIds);
+      $statsQuery->whereHas('candidate', function ($q) use ($accessibleDepartmentIds) {
+        $q->whereIn('department_id', $accessibleDepartmentIds);
       });
     }
 

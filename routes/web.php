@@ -20,6 +20,7 @@ use App\Http\Controllers\VacancyProposalController;
 use App\Http\Controllers\MPPSubmissionController;
 use App\Http\Controllers\VacancyDocumentController;
 use App\Http\Controllers\FileController;
+use App\Http\Controllers\RolePermissionController;
 
 // Redirect root to login
 Route::get('/', function () {
@@ -162,6 +163,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/export', [AccountController::class, 'export'])->name('export');
     });
 
+    // Role-Permission attachment management for Admin
+    Route::prefix('role-permissions')->name('role-permissions.')->middleware('can:manage-users')->group(function () {
+        Route::get('/', [RolePermissionController::class, 'index'])->name('index');
+        Route::get('/create', [RolePermissionController::class, 'create'])->name('create');
+        Route::post('/', [RolePermissionController::class, 'store'])->name('store');
+        Route::get('/{rolePermission}/edit', [RolePermissionController::class, 'edit'])->name('edit');
+        Route::put('/{rolePermission}', [RolePermissionController::class, 'update'])->name('update');
+        Route::delete('/{rolePermission}', [RolePermissionController::class, 'destroy'])->name('destroy');
+    });
+
     // Departemen management for Admin only
     Route::resource('departments', DepartmentController::class)
         ->only(['index', 'create', 'store', 'edit', 'update', 'destroy'])
@@ -184,7 +195,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('mpp-submissions')->name('mpp-submissions.')->middleware('auth')->group(function () {
         Route::get('/', [MPPSubmissionController::class, 'index'])->name('index');
         Route::get('/create', [MPPSubmissionController::class, 'create'])->name('create');
+        Route::get('/create-new', [MPPSubmissionController::class, 'createNew'])->name('create-new');
         Route::post('/', [MPPSubmissionController::class, 'store'])->name('store');
+        Route::post('/store-new', [MPPSubmissionController::class, 'storeNew'])->name('store-new');
+        Route::post('/mass-approve', [MPPSubmissionController::class, 'massApprove'])->name('mass-approve');
+        Route::post('/{mppSubmission}/approve-stage', [MPPSubmissionController::class, 'approveStage'])->name('approve-stage');
+        Route::post('/{mppSubmission}/disapprove-stage', [MPPSubmissionController::class, 'disapproveStage'])->name('disapprove-stage');
+        Route::post('/{mppSubmission}/sync-vacancy', [MPPSubmissionController::class, 'syncVacancy'])->name('sync-vacancy')->middleware('can:view-mpp-submission-details');
         Route::get('/{mppSubmission}', [MPPSubmissionController::class, 'show'])->name('show');
         Route::delete('/{mppSubmission}', [MPPSubmissionController::class, 'destroy'])->name('destroy');
 

@@ -57,6 +57,14 @@ class Vacancy extends Model
             ->withTimestamps();
     }
 
+    /**
+     * New-form MPP submissions linked directly through mpp_submissions.vacancy_id.
+     */
+    public function directMppSubmissions(): HasMany
+    {
+        return $this->hasMany(MPPSubmission::class, 'vacancy_id', 'id');
+    }
+
     public function vacancyDocuments(): HasMany
     {
         return $this->hasMany(VacancyDocument::class);
