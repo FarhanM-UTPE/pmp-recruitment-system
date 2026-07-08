@@ -37,13 +37,195 @@ class CandidateController extends Controller
       'next_stage_date' => 'nullable|date',
       'update_date_only' => 'nullable|boolean',
       'result' => $updateDateOnly ? 'nullable|string' : 'required|string',
+      'selected_application_ids' => 'nullable|array',
+      'selected_application_ids.*' => 'integer|exists:applications,id',
     ];
 
     $validated = $request->validate($rules);
 
     try {
-      $stageService->processStageUpdate($application, $validated);
-      return response()->json(['message' => 'Stage updated successfully.']);
+      $stage = strtolower((string) ($validated['stage'] ?? ''));
+      $result = strtoupper((string) ($validated['result'] ?? ''));
+      $isHcInterviewPass = !$updateDateOnly
+        && $stage === 'hc_interview'
+        && in_array($result, ['LULUS', 'DISARANKAN', 'DITERIMA', 'HIRED']);
+
+      $isHcInterviewFail = !$updateDateOnly
+        && $stage === 'hc_interview'
+        && in_array($result, ['TIDAK LULUS', 'DITOLAK', 'GAGAL', 'TIDAK DIHIRING', 'TIDAK DISARANKAN']);
+
+      if ($isHcInterviewFail) {
+        // For HC Interview fail result, force all candidate applications (except CANCEL) to fail.
+        $applicationsToUpdate = Application::where('candidate_id', $application->candidate_id)
+          ->where('overall_status', '!=', 'CANCEL')
+          ->get();
+
+        $stageOrder = [
+          'psikotes' => 0,
+          'hc_interview' => 1,
+          'user_interview' => 2,
+          'interview_bod' => 3,
+          'offering_letter' => 4,
+          'mcu' => 5,
+          'hiring' => 6,
+        ];
+
+        $currentOrder = $stageOrder[$stage] ?? null;
+        $stageDate = isset($validated['stage_date']) && $validated['stage_date']
+          ? \Carbon\Carbon::parse($validated['stage_date'])
+          : now();
+
+        DB::transaction(function () use ($applicationsToUpdate, $validated, $result, $stage, $currentOrder, $stageOrder, $stageDate) {
+          foreach ($applicationsToUpdate as $targetApplication) {
+            $targetApplication->stages()->updateOrCreate(
+              ['stage_name' => $stage],
+              [
+                'status' => $result,
+                'scheduled_date' => $stageDate,
+                'notes' => $validated['notes'] ?? null,
+                'conducted_by_user_id' => Auth::id(),
+              ]
+            );
+
+            if ($currentOrder !== null) {
+              $futureStageKeys = collect($stageOrder)
+                ->filter(fn($order) => $order > $currentOrder)
+                ->keys()
+                ->values();
+
+              if ($futureStageKeys->isNotEmpty()) {
+                $targetApplication->stages()->whereIn('stage_name', $futureStageKeys)->delete();
+              }
+            }
+
+            $targetApplication->overall_status = 'DITOLAK';
+            $targetApplication->save();
+          }
+
+          $candidate = $applicationsToUpdate->first()?->candidate;
+          if ($candidate) {
+            $allApplicationsResolved = $candidate->applications()
+              ->whereNotIn('overall_status', ['DITOLAK', 'CANCEL'])
+              ->doesntExist();
+
+            if ($allApplicationsResolved) {
+              $candidate->status = 'inactive';
+              $candidate->save();
+            }
+          }
+        });
+
+        $updatedCount = $applicationsToUpdate->count();
+        return response()->json([
+          'message' => "Semua lamaran kandidat ditandai Tidak Lulus ({$updatedCount} lamaran)."
+        ]);
+      } elseif ($isHcInterviewPass) {
+        $selectedApplicationIds = collect($validated['selected_application_ids'] ?? [$application->id])
+          ->filter()
+          ->map(fn($id) => (int) $id)
+          ->unique()
+          ->values();
+
+        if ($selectedApplicationIds->isEmpty()) {
+          return response()->json(['message' => 'Pilih minimal satu lamaran untuk diluluskan.'], 422);
+        }
+
+        $activeApplications = Application::where('candidate_id', $application->candidate_id)
+          ->where('overall_status', '!=', 'CANCEL')
+          ->get();
+
+        $applicationsToUpdate = $activeApplications->whereIn('id', $selectedApplicationIds)->values();
+
+        if ($applicationsToUpdate->count() !== $selectedApplicationIds->count()) {
+          return response()->json(['message' => 'Sebagian lamaran tidak valid untuk kandidat ini.'], 422);
+        }
+
+        $unselectedApplications = $activeApplications->whereNotIn('id', $selectedApplicationIds)->values();
+
+        $stageOrder = [
+          'psikotes' => 0,
+          'hc_interview' => 1,
+          'user_interview' => 2,
+          'interview_bod' => 3,
+          'offering_letter' => 4,
+          'mcu' => 5,
+          'hiring' => 6,
+        ];
+
+        $currentOrder = $stageOrder[$stage] ?? null;
+        $stageDate = isset($validated['stage_date']) && $validated['stage_date']
+          ? \Carbon\Carbon::parse($validated['stage_date'])
+          : now();
+
+        DB::transaction(function () use ($applicationsToUpdate, $unselectedApplications, $stageService, $validated, $stage, $currentOrder, $stageOrder, $stageDate) {
+          // Selected applications continue with pass result and next stage date.
+          foreach ($applicationsToUpdate as $targetApplication) {
+            $stageService->processStageUpdate($targetApplication, $validated);
+          }
+
+          // Unselected applications are forced to fail at HC Interview.
+          foreach ($unselectedApplications as $targetApplication) {
+            $targetApplication->stages()->updateOrCreate(
+              ['stage_name' => $stage],
+              [
+                'status' => 'TIDAK LULUS',
+                'scheduled_date' => $stageDate,
+                'notes' => $validated['notes'] ?? null,
+                'conducted_by_user_id' => Auth::id(),
+              ]
+            );
+
+            if ($currentOrder !== null) {
+              $futureStageKeys = collect($stageOrder)
+                ->filter(fn($order) => $order > $currentOrder)
+                ->keys()
+                ->values();
+
+              if ($futureStageKeys->isNotEmpty()) {
+                $targetApplication->stages()->whereIn('stage_name', $futureStageKeys)->delete();
+              }
+            }
+
+            $targetApplication->overall_status = 'DITOLAK';
+            $targetApplication->save();
+          }
+        });
+
+        return response()->json([
+          'message' => 'Lamaran terpilih diluluskan, dan lamaran yang tidak dipilih ditandai Tidak Lulus.'
+        ]);
+      } else {
+        $selectedApplicationIds = collect($validated['selected_application_ids'] ?? [$application->id])
+          ->filter()
+          ->map(fn($id) => (int) $id)
+          ->unique()
+          ->values();
+
+        if ($selectedApplicationIds->isEmpty()) {
+          return response()->json(['message' => 'Pilih minimal satu lamaran untuk diperbarui.'], 422);
+        }
+
+        $applicationsToUpdate = Application::whereIn('id', $selectedApplicationIds)
+          ->where('candidate_id', $application->candidate_id)
+          ->get();
+
+        if ($applicationsToUpdate->count() !== $selectedApplicationIds->count()) {
+          return response()->json(['message' => 'Sebagian lamaran tidak valid untuk kandidat ini.'], 422);
+        }
+      }
+
+      DB::transaction(function () use ($applicationsToUpdate, $stageService, $validated) {
+        foreach ($applicationsToUpdate as $targetApplication) {
+          $stageService->processStageUpdate($targetApplication, $validated);
+        }
+      });
+
+      $updatedCount = $applicationsToUpdate->count();
+      $message = $updatedCount > 1
+        ? "Stage berhasil diperbarui untuk {$updatedCount} lamaran."
+        : 'Stage updated successfully.';
+
+      return response()->json(['message' => $message]);
     } catch (\Exception $e) {
       Log::error('Error updating stage: ' . $e->getMessage(), [
         'trace' => $e->getTraceAsString()

@@ -177,6 +177,39 @@
                                                     class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                                     placeholder="Tambahkan catatan (opsional)..."></textarea>
                                             </div>
+
+                                            <template x-if="shouldShowApplicationSelection()">
+                                                <div class="bg-blue-50 border border-blue-200 rounded-md p-3"
+                                                    :class="!canEditResult ? 'opacity-75' : ''">
+                                                    <p class="text-xs font-medium text-blue-800 mb-2">Pilih lamaran yang akan diluluskan:</p>
+                                                    <template x-if="!canEditResult">
+                                                        <p class="text-xs text-amber-700 mb-2">
+                                                            Pilihan lamaran dikunci karena stage selanjutnya sudah ada.
+                                                        </p>
+                                                    </template>
+                                                    <div class="space-y-2">
+                                                        <template x-for="app in selectableApplications" :key="app.id">
+                                                            <label class="flex items-start gap-2 text-xs text-gray-700">
+                                                                <input type="checkbox" :value="app.id" x-model="selectedApplicationIds"
+                                                                    :disabled="!canEditResult"
+                                                                    class="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                                                <span>
+                                                                    <span class="font-medium" x-text="app.vacancy && app.vacancy.name ? app.vacancy.name : 'N/A'"></span>
+                                                                    <span class="text-gray-500" x-text="'(Aplikasi ID: ' + app.id + ')' "></span>
+                                                                </span>
+                                                            </label>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <template x-if="stageData.stage === 'hc_interview' && stageData.result === 'TIDAK LULUS'">
+                                                <div class="bg-red-50 border border-red-200 rounded-md p-3">
+                                                    <p class="text-xs font-medium text-red-800">
+                                                        Hasil Tidak Lulus pada HC Interview akan diterapkan ke semua lamaran kandidat ini.
+                                                    </p>
+                                                </div>
+                                            </template>
                                         </div>
                                     </div>
                                 </div>
@@ -337,12 +370,9 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
-                <!-- Sidebar Kiri - Informasi Kandidat -->
-                <div class="lg:col-span-1 space-y-6">
-
-                    <div class="overflow-hidden rounded-lg bg-white shadow">
+                    <div class="overflow-hidden rounded-lg bg-white shadow lg:order-1">
                         <div class="px-6 py-4 border-b border-gray-200">
                             <h3 class="text-lg font-medium text-gray-900">Informasi Pribadi</h3>
                         </div>
@@ -404,7 +434,7 @@
                         </div>
                     </div>
 
-                    <div class="overflow-hidden rounded-lg bg-white shadow">
+                    <div class="overflow-hidden rounded-lg bg-white shadow lg:order-2">
                         <div class="px-6 py-4 border-b border-gray-200">
                             <h3 class="text-lg font-medium text-gray-900">Informasi Pendidikan</h3>
                         </div>
@@ -440,7 +470,7 @@
                     </div>
 
                     @if ($primaryApplication)
-                        <div class="overflow-hidden rounded-lg bg-white shadow">
+                        <div class="overflow-hidden rounded-lg bg-white shadow lg:order-6">
                             <div class="px-6 py-4 border-b border-gray-200">
                                 <h3 class="text-lg font-medium text-gray-900">Informasi Posisi (Aktif)</h3>
                             </div>
@@ -468,7 +498,7 @@
 
                     @can('view-candidate-documents', $candidate)
                         @if ($candidate->cv || $candidate->flk)
-                            <div class="overflow-hidden rounded-lg bg-white shadow">
+                            <div class="overflow-hidden rounded-lg bg-white shadow lg:order-7">
                                 <div class="px-6 py-4 border-b border-gray-200">
                                     <h3 class="text-lg font-medium text-gray-900">Berkas</h3>
                                 </div>
@@ -537,13 +567,8 @@
                         @endif
                     @endcan
 
-                </div>
-
-                <!-- Konten Utama - Riwayat dan Timeline -->
-                <div class="lg:col-span-2 space-y-6">
-
                     <!-- NEW: Application History Card -->
-                    <div class="overflow-hidden rounded-lg bg-white shadow">
+                    <div class="overflow-hidden rounded-lg bg-white shadow lg:col-span-2 lg:order-3">
                         <div class="px-6 py-4 border-b border-gray-200">
                             <h3 class="text-lg font-medium text-gray-900">Riwayat Lamaran</h3>
                             <p class="mt-1 text-sm text-gray-500">Klik baris untuk melihat timeline detail lamaran tersebut.
@@ -621,7 +646,7 @@
                     </div>
 
                     <!-- Timeline Rekrutmen for Active Application -->
-                    <div class="overflow-hidden rounded-lg bg-white shadow">
+                    <div class="overflow-hidden rounded-lg bg-white shadow lg:col-span-2 lg:order-4">
                         <div class="px-6 py-4 border-b border-gray-200">
                             <h3 class="text-lg font-medium text-gray-900">Timeline Rekrutmen</h3>
                             <p class="mt-1 text-sm text-gray-500">
@@ -938,8 +963,33 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
+
+                    <div class="overflow-hidden rounded-lg bg-white shadow lg:col-span-2 lg:order-5">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-lg font-medium text-gray-900">Catatan Tahapan</h3>
+                            <p class="mt-1 text-sm text-gray-500">Daftar catatan untuk lamaran yang sedang aktif.</p>
+                        </div>
+                        <div class="px-6 py-4">
+                            <template x-if="currentTimeline && currentTimeline.some(s => s.notes && s.notes.trim())">
+                                <div class="space-y-3">
+                                    <template x-for="stage in currentTimeline.filter(s => s.notes && s.notes.trim())"
+                                        :key="'note-' + stage.stage_key">
+                                        <div class="rounded-md border border-gray-200 bg-gray-50 p-3">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <p class="text-sm font-semibold text-gray-800" x-text="stage.display_name"></p>
+                                                <span class="text-xs text-gray-500" x-show="stage.date"
+                                                    x-text="formatDate(stage.date)"></span>
+                                            </div>
+                                            <p class="mt-1 text-xs text-gray-700 whitespace-pre-wrap" x-text="stage.notes"></p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="!currentTimeline || !currentTimeline.some(s => s.notes && s.notes.trim())">
+                                <p class="text-sm text-gray-500">Belum ada catatan untuk lamaran ini.</p>
+                            </template>
+                        </div>
+                    </div>
 
             @if($hasAssessmentScore)
                 @php
@@ -996,7 +1046,7 @@
                     };
                 @endphp
 
-            <div class="mt-6 overflow-hidden rounded-lg bg-white shadow">
+            <div class="overflow-hidden rounded-lg bg-white shadow lg:col-span-2 lg:order-8">
                 <div class="px-6 py-4 border-b border-gray-200">
                     <h3 class="text-lg font-medium text-gray-900">Personality Dimension</h3>
                     <p class="mt-1 text-sm text-gray-500">Profil Psikotes Kandidat</p>
@@ -1474,6 +1524,7 @@ Kompetensi ini mengukur potensi untuk belajar dan fokus pada unjuk kerja, tidak 
             </div>
             @endif
         </div>
+        </div>
     @endcan
 
     @push('scripts')
@@ -1490,6 +1541,7 @@ Kompetensi ini mengukur potensi untuk belajar dan fokus pada unjuk kerja, tidak 
                     selectedVacancyId: '',
                     selectedMppYear: '',
                     availableMppYears: [],
+                    selectedApplicationIds: [],
 
                     allTimelines: allTimelines,
                     activeApplicationId: initialActiveApplicationId,
@@ -1665,6 +1717,15 @@ Kompetensi ini mengukur potensi untuk belajar dan fokus pada unjuk kerja, tidak 
                         }
                     },
 
+                    shouldShowApplicationSelection() {
+                        return this.stageData.stage === 'hc_interview' && this.stageData.result === 'LULUS' && this
+                            .selectableApplications.length > 1;
+                    },
+
+                    get selectableApplications() {
+                        return this.applications.filter(app => (app.overall_status || '').toUpperCase() !== 'CANCEL');
+                    },
+
                     setActiveApplication(appId, vacancyName) {
                         this.activeApplicationId = appId;
                         this.activeApplicationVacancyName = vacancyName;
@@ -1696,6 +1757,7 @@ Kompetensi ini mengukur potensi untuk belajar dan fokus pada unjuk kerja, tidak 
                         }
 
                         this.showNextStage = false;
+                        this.selectedApplicationIds = [String(this.activeApplicationId)];
 
                         this.stageData = {
                             stage: stageKey,
@@ -1766,6 +1828,11 @@ Kompetensi ini mengukur potensi untuk belajar dan fokus pada unjuk kerja, tidak 
                             return;
                         }
 
+                        if (this.shouldShowApplicationSelection() && this.selectedApplicationIds.length === 0) {
+                            alert('Pilih minimal satu lamaran untuk diperbarui.');
+                            return;
+                        }
+
                         // Only validate result if it can be edited
                         if (this.canEditResult && !this.stageData.result) {
                             alert('Hasil harus diisi.');
@@ -1808,6 +1875,8 @@ Kompetensi ini mengukur potensi untuk belajar dan fokus pada unjuk kerja, tidak 
                                 null,
                             update_date_only: !this
                                 .canEditResult, // Flag to indicate only date should be updated
+                            selected_application_ids: this.shouldShowApplicationSelection() ? this
+                                .selectedApplicationIds.map(id => Number(id)) : [this.activeApplicationId],
                         };
 
                         try {
