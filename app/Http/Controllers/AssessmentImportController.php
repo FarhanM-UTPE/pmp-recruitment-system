@@ -427,7 +427,88 @@ class AssessmentImportController extends Controller
       $payload[$targetColumn] = $this->parseScore($row[$sourceColumn]);
     }
 
+    // Always derive competency scores from base dimensions, not from uploaded competency columns.
+    $payload = array_merge($payload, $this->calculateCompetencyScores($payload));
+
     return $payload;
+  }
+
+  private function calculateCompetencyScores(array $payload): array
+  {
+    return [
+      'competency_is_score' => $this->weightedRounded($payload, [
+        'impact_and_influence_score' => 0.20,
+        'extraversion_score' => 0.20,
+        'assertiveness_score' => 0.20,
+        'flexibility_score' => 0.20,
+        'reading_comprehension_score' => 0.20,
+      ]),
+      'competency_aj_score' => $this->weightedRounded($payload, [
+        'idea_score' => 0.33,
+        'deductive_reasoning_score' => 0.33,
+        'inductive_reasoning_score' => 0.33,
+      ]),
+      'competency_pda_score' => $this->weightedRounded($payload, [
+        'working_autonomously_score' => 0.33,
+        'conscientiousness_score' => 0.33,
+        'deductive_reasoning_score' => 0.33,
+      ]),
+      'competency_tw_score' => $this->weightedRounded($payload, [
+        'teamwork_score' => 0.33,
+        'extraversion_score' => 0.33,
+        'impact_and_influence_score' => 0.33,
+      ]),
+      'competency_dc_score' => $this->weightedRounded($payload, [
+        'persistence_score' => 0.25,
+        'achievement_orientation_score' => 0.25,
+        'action_score' => 0.25,
+        'working_memory_score' => 0.25,
+      ]),
+    ];
+  }
+
+  private function weightedRounded(array $payload, array $weights): ?float
+  {
+    $sum = 0.0;
+
+    foreach ($weights as $field => $weight) {
+      $value = $this->payloadScore($payload, $field);
+      if ($value === null) {
+        return null;
+      }
+
+      $sum += $value * $weight;
+    }
+
+    return (float) round($sum);
+  }
+
+  private function payloadScore(array $payload, string $field): ?float
+  {
+    if (!array_key_exists($field, $payload) || $payload[$field] === null || $payload[$field] === '') {
+      return null;
+    }
+
+    return $this->mapScoreToFiveScale((float) $payload[$field]);
+  }
+
+  private function mapScoreToFiveScale(float $score): float
+  {
+    $scoreMap = [
+      1 => 1,
+      2 => 1,
+      3 => 2,
+      4 => 2,
+      5 => 3,
+      6 => 3,
+      7 => 4,
+      8 => 4,
+      9 => 4,
+      10 => 5,
+    ];
+
+    $normalizedScore = (int) round($score);
+    return (float) ($scoreMap[$normalizedScore] ?? 0);
   }
 
   private function getScoreColumnMap(): array
