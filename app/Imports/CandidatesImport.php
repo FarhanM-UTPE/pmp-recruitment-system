@@ -357,32 +357,19 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
             );
 
             // ================= UPSERT APPLICATION & STAGE =================
-            // If candidate already exists, keep existing vacancy (do not update from import vacancy_title).
-            $existingApplication = null;
-            if ($existingCandidate) {
-                $existingApplication = $candidate->applications()->latest('id')->first();
-            }
-
-            if ($existingApplication) {
-                $existingApplication->update([
+            // Keep one application per candidate + vacancy + mpp year.
+            // This allows the same applicant_id to have multiple applications for different vacancies.
+            $application = Application::updateOrCreate(
+                [
+                    'candidate_id' => $candidate->id,
+                    'vacancy_id' => $vacancy ? $vacancy->id : null,
+                    'mpp_year' => $mppYear,
+                ],
+                [
                     'overall_status' => $overallStatus,
-                    'department_id' => $existingApplication->department_id ?? $departmentId,
-                ]);
-                $application = $existingApplication;
-            } else {
-                // New candidate (or candidate with no application yet): use imported vacancy.
-                $application = Application::updateOrCreate(
-                    [
-                        'candidate_id' => $candidate->id,
-                        'vacancy_id' => $vacancy ? $vacancy->id : null,
-                        'mpp_year' => $mppYear,
-                    ],
-                    [
-                        'overall_status' => $overallStatus,
-                        'department_id' => $departmentId,
-                    ]
-                );
-            }
+                    'department_id' => $departmentId,
+                ]
+            );
 
             Log::info('CandidatesImport: Application processed', [
                 'row' => $rowIndex,
