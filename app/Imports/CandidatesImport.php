@@ -20,12 +20,17 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
     protected int $processed = 0;
     protected int $skipped = 0;
     protected int $userId;
+    protected string $selectedSource;
     protected array $errors = []; // Collect error details
 
-    public function __construct(int $userId)
+    public function __construct(int $userId, ?string $selectedSource = null)
     {
         $this->userId = $userId;
-        Log::debug('CandidatesImport: Constructor called', ['userId' => $userId]);
+        $this->selectedSource = $this->normalizeSelectedSource($selectedSource);
+        Log::debug('CandidatesImport: Constructor called', [
+            'userId' => $userId,
+            'selected_source' => $this->selectedSource,
+        ]);
     }
 
     /**
@@ -337,7 +342,7 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
                 ['applicant_id' => $applicantId],
                 [
                     'nama' => $name,
-                    'source' => $this->keepExistingIfEmpty($row['source'] ?? null, $existingCandidate?->source),
+                    'source' => $this->keepExistingIfEmpty($this->selectedSource ?: ($row['source'] ?? null), $existingCandidate?->source),
                     'jk' => $this->keepExistingIfEmpty($genderNormalized, $existingCandidate?->jk), // Use normalized gender
                     'tanggal_lahir' => $birthDate,
                     'alamat_email' => $this->keepExistingIfEmpty($row['email'] ?? null, $existingCandidate?->alamat_email),
@@ -504,5 +509,14 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
     public function getErrors(): array
     {
         return $this->errors;
+    }
+
+    private function normalizeSelectedSource(?string $selectedSource): string
+    {
+        return match (trim((string) $selectedSource)) {
+            'Campus Hiring' => 'Campus Hiring',
+            'Others' => 'Others',
+            default => 'Airsys',
+        };
     }
 }

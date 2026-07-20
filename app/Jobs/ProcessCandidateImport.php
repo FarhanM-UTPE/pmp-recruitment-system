@@ -30,14 +30,16 @@ class ProcessCandidateImport implements ShouldQueue
     protected int $importHistoryId;
     protected string $importType;
     protected ?string $originalFilename;
+    protected string $selectedSource;
 
-    public function __construct(string $path, int $authUserId, int $importHistoryId, string $importType = 'candidate', ?string $originalFilename = null)
+    public function __construct(string $path, int $authUserId, int $importHistoryId, string $importType = 'candidate', ?string $originalFilename = null, ?string $selectedSource = null)
     {
         $this->path = $path;
         $this->authUserId = $authUserId;
         $this->importHistoryId = $importHistoryId;
         $this->importType = $importType;
         $this->originalFilename = $originalFilename;
+        $this->selectedSource = $this->normalizeSelectedSource($selectedSource);
     }
 
     public function handle()
@@ -79,7 +81,7 @@ class ProcessCandidateImport implements ShouldQueue
             if ($this->importType === 'assessment_unified') {
                 [$processed, $skipped, $errors] = $this->processUnifiedAssessmentImport($absolutePath);
             } else {
-                $import = new CandidatesImport($this->authUserId);
+                $import = new CandidatesImport($this->authUserId, $this->selectedSource);
                 Excel::import($import, $path);
 
                 $processed = $import->getProcessedCount();
@@ -163,10 +165,10 @@ class ProcessCandidateImport implements ShouldQueue
         $assessmentRows = $parsed['rows'];
 
         $candidateRows = array_map(function (array $row) {
-            return $this->mapAssessmentToCandidateRow($row);
+            return $this->mapAssessmentToCandidateRow($row, $this->selectedSource);
         }, $assessmentRows);
 
-        $candidateImport = new CandidatesImport($this->authUserId);
+        $candidateImport = new CandidatesImport($this->authUserId, $this->selectedSource);
         $candidateImport->collection(collect($candidateRows));
 
         $errors = $candidateImport->getErrors();
@@ -221,7 +223,7 @@ class ProcessCandidateImport implements ShouldQueue
         return [$processed, $skipped, $errors];
     }
 
-    private function mapAssessmentToCandidateRow(array $row): array
+    private function mapAssessmentToCandidateRow(array $row, string $selectedSource = 'Airsys'): array
     {
         $vacancy = trim((string) ($row['vacancy_title'] ?? ''));
         $vacancy = preg_replace('/\s*-\s*PMP\b/i', '', $vacancy);
@@ -235,12 +237,21 @@ class ProcessCandidateImport implements ShouldQueue
             'tanggal_lahir' => $row['date_of_birth'] ?? null,
             'perguruan_tinggi' => $row['university'] ?? null,
             'jurusan' => $row['major'] ?? null,
-            'source' => 'Airsys',
+            'source' => $selectedSource,
             'vacancy' => trim((string) $vacancy),
             'psikotest_result' => $row['final_result_hasil_cut_off_score'] ?? null,
             'test_date' => $row['test_date'] ?? null,
             'psikotes_notes' => '-',
         ];
+    }
+
+    private function normalizeSelectedSource(?string $selectedSource): string
+    {
+        return match (trim((string) $selectedSource)) {
+            'Campus Hiring' => 'Campus Hiring',
+            'Others' => 'Others',
+            default => 'Airsys',
+        };
     }
 
     private function parseAssessmentFile(string $fullPath): array
