@@ -217,8 +217,8 @@
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-4 flex-1">
                                     <div class="w-10 h-10 
-                                        @if($history->status == 'success' || $history->status == 'completed') bg-green-50 @elseif($history->status == 'failed') bg-red-50 @else bg-blue-50 @endif 
-                                        rounded-lg flex items-center justify-center">
+                                                    @if($history->status == 'success' || $history->status == 'completed') bg-green-50 @elseif($history->status == 'failed') bg-red-50 @else bg-blue-50 @endif 
+                                                    rounded-lg flex items-center justify-center">
                                         @if($history->status == 'success' || $history->status == 'completed')
                                             <i class="fas fa-check-circle text-green-600"></i>
                                         @elseif($history->status == 'failed')

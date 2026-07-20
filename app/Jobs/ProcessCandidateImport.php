@@ -225,8 +225,7 @@ class ProcessCandidateImport implements ShouldQueue
 
     private function mapAssessmentToCandidateRow(array $row, string $selectedSource = 'Airsys'): array
     {
-        $vacancy = trim((string) ($row['vacancy_title'] ?? ''));
-        $vacancy = preg_replace('/\s*-\s*PMP\b/i', '', $vacancy);
+        $vacancy = $this->normalizeVacancyTitle((string) ($row['vacancy_title'] ?? ''));
 
         return [
             'tahun_mpp' => (string) now()->year,
@@ -243,6 +242,19 @@ class ProcessCandidateImport implements ShouldQueue
             'test_date' => $row['test_date'] ?? null,
             'psikotes_notes' => '-',
         ];
+    }
+
+    private function normalizeVacancyTitle(string $vacancyTitle): string
+    {
+        $vacancy = trim($vacancyTitle);
+
+        // Remove source prefix such as "Campus Hiring SBY - " when present.
+        $vacancy = preg_replace('/^\s*Campus\s+Hiring[^-]*-\s*/i', '', $vacancy);
+
+        // Remove environment suffix such as " - PMP".
+        $vacancy = preg_replace('/\s*-\s*PMP\b/i', '', $vacancy);
+
+        return trim((string) $vacancy);
     }
 
     private function normalizeSelectedSource(?string $selectedSource): string
