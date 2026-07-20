@@ -88,7 +88,7 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
             }
 
             // ================= VACANCY & DEPARTMENT RESOLVE =================
-            $vacancyName = trim($row['vacancy'] ?? null);
+            $vacancyName = $this->normalizeVacancyTitle((string) ($row['vacancy'] ?? ''));
             $mppYear = trim($row['tahun_mpp'] ?? null);
             $vacancy = null;
             $departmentId = null;
@@ -509,6 +509,19 @@ class CandidatesImport implements ToCollection, WithHeadingRow, WithChunkReading
     public function getErrors(): array
     {
         return $this->errors;
+    }
+
+    private function normalizeVacancyTitle(string $vacancyTitle): string
+    {
+        $vacancy = trim($vacancyTitle);
+
+        // Remove source prefix such as "Campus Hiring SBY - " when present.
+        $vacancy = preg_replace('/^\s*Campus\s+Hiring[^-]*-\s*/i', '', $vacancy);
+
+        // Remove environment suffix such as " - PMP".
+        $vacancy = preg_replace('/\s*-\s*PMP\b/i', '', $vacancy);
+
+        return trim((string) $vacancy);
     }
 
     private function normalizeSelectedSource(?string $selectedSource): string
