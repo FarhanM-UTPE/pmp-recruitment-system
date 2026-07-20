@@ -189,8 +189,12 @@ class ImportController extends Controller
 
     public function confirmImport(Request $request)
     {
-        $request->validate(['file_id' => 'required|string']);
+        $request->validate([
+            'file_id' => 'required|string',
+            'source' => 'required|in:Airsys,Campus Hiring,Others',
+        ]);
         $fileId = $request->input('file_id');
+        $selectedSource = $request->input('source');
 
         try {
             $cachedData = Cache::get($fileId);
@@ -220,7 +224,7 @@ class ImportController extends Controller
             ]);
 
             // Dispatch the job asynchronously
-            ProcessCandidateImport::dispatch($path, auth()->id(), $importHistory->id, $importType, $filename)->delay(now()->addSeconds(2));
+            ProcessCandidateImport::dispatch($path, auth()->id(), $importHistory->id, $importType, $filename, $selectedSource)->delay(now()->addSeconds(2));
 
             // Forget the cache key, the job will handle file deletion
             Cache::forget($fileId);
