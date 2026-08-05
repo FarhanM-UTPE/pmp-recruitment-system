@@ -70,7 +70,7 @@
             <div class="bg-white rounded-xl shadow p-4 mb-6">
                 <form method="GET" x-ref="filterForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     @foreach (request()->query() as $key => $value)
-                        @if (!in_array($key, ['search', 'year', 'status', 'department_id', 'source', 'stage', 'type']) && !is_array($value))
+                        @if (!in_array($key, ['search', 'year', 'status', 'department_id', 'source', 'stage', 'type', 'page']) && !is_array($value))
                             <input type="hidden" name="{{ $key }}" value="{{ $value }}">
                         @endif
                     @endforeach
