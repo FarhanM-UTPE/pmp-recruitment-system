@@ -607,8 +607,9 @@ class CandidateController extends Controller
     }
 
     $type = $request->input('type');
+    $duplicateStatus = $request->input('duplicate_status');
 
-    $hasFilters = $request->anyFilled(['year', 'vacancy_id', 'type', 'search', 'department_id', 'source', 'status', 'stage']) || $request->boolean('not_moved');
+    $hasFilters = $request->anyFilled(['year', 'vacancy_id', 'type', 'duplicate_status', 'search', 'department_id', 'source', 'status', 'stage']) || $request->boolean('not_moved');
 
     // 1. Prepare Filter Options
     $years = \App\Services\YearProvider::availableYears();
@@ -660,30 +661,59 @@ class CandidateController extends Controller
     }
     $duplicateCandidateIds = $duplicateCandidateQuery->pluck('candidate_id');
 
-    if ($request->filled('type')) {
-      if ($request->type === 'duplicate') {
+    if ($request->filled('duplicate_status')) {
+      if ($request->duplicate_status === 'duplicate') {
         $query->whereIn('applications.candidate_id', $duplicateCandidateIds);
         $statsQuery->whereIn('applications.candidate_id', $duplicateCandidateIds);
-      } elseif ($request->type === 'non-duplicate') {
+      } elseif ($request->duplicate_status === 'non-duplicate') {
         $query->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
         $statsQuery->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
-      } elseif ($request->type === 'organic') {
-        $query->whereHas('candidate', function ($q) {
-          $q->where('airsys_internal', 'Yes');
+      }
+    }
+
+    // Legacy logic retained for reference:
+    // if ($request->filled('type')) {
+    //   if ($request->type === 'organic') {
+    //     $query->whereHas('candidate', function ($q) {
+    //       $q->where('airsys_internal', 'Yes');
+    //     });
+    //     $statsQuery->whereHas('candidate', function ($q) {
+    //       $q->where('airsys_internal', 'Yes');
+    //     });
+    //   } elseif ($request->type === 'non-organic') {
+    //     $query->whereHas('candidate', function ($q) {
+    //       $q->where('airsys_internal', 'No');
+    //     });
+    //     $statsQuery->whereHas('candidate', function ($q) {
+    //       $q->where('airsys_internal', 'No');
+    //     });
+    //   }
+    // }
+
+    if ($request->filled('type')) {
+      $applyTypeTruthFilter = function ($builder, string $expectedVacancyStatus) {
+        $builder->whereExists(function ($sub) use ($expectedVacancyStatus) {
+          $sub->select(DB::raw(1))
+            ->from('mpp_submission_vacancy as msv')
+            ->join('mpp_submissions as ms', 'ms.id', '=', 'msv.m_p_p_submission_id')
+            ->whereColumn('msv.vacancy_id', 'applications.vacancy_id')
+            ->whereColumn('ms.year', 'applications.mpp_year')
+            ->where('msv.proposal_status', 'approved')
+            ->whereIn('msv.vacancy_status', ['OS', 'OSPKWT'])
+            ->groupBy('msv.vacancy_id', 'ms.year')
+            ->havingRaw('COUNT(DISTINCT msv.vacancy_status) = 1')
+            ->havingRaw('MAX(msv.vacancy_status) = ?', [$expectedVacancyStatus]);
         });
-        $statsQuery->whereHas('candidate', function ($q) {
-          $q->where('airsys_internal', 'Yes');
-        });
+      };
+
+      if ($request->type === 'organic') {
+        // Mapping requested: OS => No, but treated as Organik in filter label
+        $applyTypeTruthFilter($query, 'OS');
+        $applyTypeTruthFilter($statsQuery, 'OS');
       } elseif ($request->type === 'non-organic') {
-        $query->whereHas('candidate', function ($q) {
-          $q->where('airsys_internal', 'No');
-        });
-        $statsQuery->whereHas('candidate', function ($q) {
-          $q->where('airsys_internal', 'No');
-        });
-      } elseif ($request->type === 'non-duplicate') {
-        $query->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
-        $statsQuery->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
+        // Mapping requested: OSPKWT => Yes, treated as Non-Organik in filter label
+        $applyTypeTruthFilter($query, 'OSPKWT');
+        $applyTypeTruthFilter($statsQuery, 'OSPKWT');
       }
     }
 
@@ -1113,6 +1143,7 @@ class CandidateController extends Controller
       'statuses',
       'stats',
       'type',
+      'duplicateStatus',
       'duplicateCandidateIds',
       'departments',
       'sources',
