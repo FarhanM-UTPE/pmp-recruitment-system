@@ -607,8 +607,9 @@ class CandidateController extends Controller
     }
 
     $type = $request->input('type');
+    $duplicateStatus = $request->input('duplicate_status');
 
-    $hasFilters = $request->anyFilled(['year', 'vacancy_id', 'type', 'search', 'department_id', 'source', 'status', 'stage']) || $request->boolean('not_moved');
+    $hasFilters = $request->anyFilled(['year', 'vacancy_id', 'type', 'duplicate_status', 'search', 'department_id', 'source', 'status', 'stage']) || $request->boolean('not_moved');
 
     // 1. Prepare Filter Options
     $years = \App\Services\YearProvider::availableYears();
@@ -660,14 +661,18 @@ class CandidateController extends Controller
     }
     $duplicateCandidateIds = $duplicateCandidateQuery->pluck('candidate_id');
 
-    if ($request->filled('type')) {
-      if ($request->type === 'duplicate') {
+    if ($request->filled('duplicate_status')) {
+      if ($request->duplicate_status === 'duplicate') {
         $query->whereIn('applications.candidate_id', $duplicateCandidateIds);
         $statsQuery->whereIn('applications.candidate_id', $duplicateCandidateIds);
-      } elseif ($request->type === 'non-duplicate') {
+      } elseif ($request->duplicate_status === 'non-duplicate') {
         $query->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
         $statsQuery->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
-      } elseif ($request->type === 'organic') {
+      }
+    }
+
+    if ($request->filled('type')) {
+      if ($request->type === 'organic') {
         $query->whereHas('candidate', function ($q) {
           $q->where('airsys_internal', 'Yes');
         });
@@ -681,9 +686,6 @@ class CandidateController extends Controller
         $statsQuery->whereHas('candidate', function ($q) {
           $q->where('airsys_internal', 'No');
         });
-      } elseif ($request->type === 'non-duplicate') {
-        $query->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
-        $statsQuery->whereNotIn('applications.candidate_id', $duplicateCandidateIds);
       }
     }
 
@@ -1113,6 +1115,7 @@ class CandidateController extends Controller
       'statuses',
       'stats',
       'type',
+      'duplicateStatus',
       'duplicateCandidateIds',
       'departments',
       'sources',
