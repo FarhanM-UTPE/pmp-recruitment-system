@@ -671,21 +671,49 @@ class CandidateController extends Controller
       }
     }
 
+    // Legacy logic retained for reference:
+    // if ($request->filled('type')) {
+    //   if ($request->type === 'organic') {
+    //     $query->whereHas('candidate', function ($q) {
+    //       $q->where('airsys_internal', 'Yes');
+    //     });
+    //     $statsQuery->whereHas('candidate', function ($q) {
+    //       $q->where('airsys_internal', 'Yes');
+    //     });
+    //   } elseif ($request->type === 'non-organic') {
+    //     $query->whereHas('candidate', function ($q) {
+    //       $q->where('airsys_internal', 'No');
+    //     });
+    //     $statsQuery->whereHas('candidate', function ($q) {
+    //       $q->where('airsys_internal', 'No');
+    //     });
+    //   }
+    // }
+
     if ($request->filled('type')) {
+      $applyTypeTruthFilter = function ($builder, string $expectedVacancyStatus) {
+        $builder->whereExists(function ($sub) use ($expectedVacancyStatus) {
+          $sub->select(DB::raw(1))
+            ->from('mpp_submission_vacancy as msv')
+            ->join('mpp_submissions as ms', 'ms.id', '=', 'msv.m_p_p_submission_id')
+            ->whereColumn('msv.vacancy_id', 'applications.vacancy_id')
+            ->whereColumn('ms.year', 'applications.mpp_year')
+            ->where('msv.proposal_status', 'approved')
+            ->whereIn('msv.vacancy_status', ['OS', 'OSPKWT'])
+            ->groupBy('msv.vacancy_id', 'ms.year')
+            ->havingRaw('COUNT(DISTINCT msv.vacancy_status) = 1')
+            ->havingRaw('MAX(msv.vacancy_status) = ?', [$expectedVacancyStatus]);
+        });
+      };
+
       if ($request->type === 'organic') {
-        $query->whereHas('candidate', function ($q) {
-          $q->where('airsys_internal', 'Yes');
-        });
-        $statsQuery->whereHas('candidate', function ($q) {
-          $q->where('airsys_internal', 'Yes');
-        });
+        // Mapping requested: OS => No, but treated as Organik in filter label
+        $applyTypeTruthFilter($query, 'OS');
+        $applyTypeTruthFilter($statsQuery, 'OS');
       } elseif ($request->type === 'non-organic') {
-        $query->whereHas('candidate', function ($q) {
-          $q->where('airsys_internal', 'No');
-        });
-        $statsQuery->whereHas('candidate', function ($q) {
-          $q->where('airsys_internal', 'No');
-        });
+        // Mapping requested: OSPKWT => Yes, treated as Non-Organik in filter label
+        $applyTypeTruthFilter($query, 'OSPKWT');
+        $applyTypeTruthFilter($statsQuery, 'OSPKWT');
       }
     }
 
