@@ -708,12 +708,12 @@ class CandidateController extends Controller
 
       if ($request->type === 'organic') {
         // Mapping requested: OS => No, but treated as Organik in filter label
-        $applyTypeTruthFilter($query, 'OS');
-        $applyTypeTruthFilter($statsQuery, 'OS');
-      } elseif ($request->type === 'non-organic') {
-        // Mapping requested: OSPKWT => Yes, treated as Non-Organik in filter label
         $applyTypeTruthFilter($query, 'OSPKWT');
         $applyTypeTruthFilter($statsQuery, 'OSPKWT');
+      } elseif ($request->type === 'non-organic') {
+        // Mapping requested: OSPKWT => Yes, treated as Non-Organik in filter label
+        $applyTypeTruthFilter($query, 'OS');
+        $applyTypeTruthFilter($statsQuery, 'OS');
       }
     }
 
