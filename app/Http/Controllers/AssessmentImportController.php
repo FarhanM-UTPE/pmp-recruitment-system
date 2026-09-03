@@ -427,7 +427,7 @@ class AssessmentImportController extends Controller
       $payload[$targetColumn] = $this->parseScore($row[$sourceColumn]);
     }
 
-    // Always derive competency scores from base dimensions, not from uploaded competency columns.
+    // Prefer uploaded competency scores if present; otherwise derive them from the base dimensions.
     $payload = array_merge($payload, $this->calculateCompetencyScores($payload));
 
     return $payload;
@@ -435,36 +435,55 @@ class AssessmentImportController extends Controller
 
   private function calculateCompetencyScores(array $payload): array
   {
-    return [
-      'competency_is_score' => $this->weightedRounded($payload, [
+    $competencyWeights = [
+      'competency_is_score' => [
         'impact_and_influence_score' => 0.20,
         'extraversion_score' => 0.20,
         'assertiveness_score' => 0.20,
         'flexibility_score' => 0.20,
         'reading_comprehension_score' => 0.20,
-      ]),
-      'competency_aj_score' => $this->weightedRounded($payload, [
+      ],
+      'competency_aj_score' => [
         'idea_score' => 0.33,
         'deductive_reasoning_score' => 0.33,
         'inductive_reasoning_score' => 0.33,
-      ]),
-      'competency_pda_score' => $this->weightedRounded($payload, [
+      ],
+      'competency_pda_score' => [
         'working_autonomously_score' => 0.33,
         'conscientiousness_score' => 0.33,
         'deductive_reasoning_score' => 0.33,
-      ]),
-      'competency_tw_score' => $this->weightedRounded($payload, [
+      ],
+      'competency_tw_score' => [
         'teamwork_score' => 0.33,
         'extraversion_score' => 0.33,
         'impact_and_influence_score' => 0.33,
-      ]),
-      'competency_dc_score' => $this->weightedRounded($payload, [
+      ],
+      'competency_dc_score' => [
         'persistence_score' => 0.25,
         'achievement_orientation_score' => 0.25,
         'action_score' => 0.25,
         'working_memory_score' => 0.25,
-      ]),
+      ],
     ];
+
+    $result = [];
+    foreach ($competencyWeights as $competencyField => $weights) {
+      if ($this->payloadHasValue($payload, $competencyField)) {
+        $result[$competencyField] = (float) $payload[$competencyField];
+        continue;
+      }
+
+      $result[$competencyField] = $this->weightedRounded($payload, $weights);
+    }
+
+    return $result;
+  }
+
+  private function payloadHasValue(array $payload, string $field): bool
+  {
+    return array_key_exists($field, $payload)
+      && $payload[$field] !== null
+      && $payload[$field] !== '';
   }
 
   private function weightedRounded(array $payload, array $weights): ?float
@@ -538,6 +557,11 @@ class AssessmentImportController extends Controller
       'competency_is_norm_score' => 'competency_is_score',
       'competency_pda_norm_score' => 'competency_pda_score',
       'competency_tw_norm_score' => 'competency_tw_score',
+      'competency_aj_score' => 'competency_aj_score',
+      'competency_dc_score' => 'competency_dc_score',
+      'competency_is_score' => 'competency_is_score',
+      'competency_pda_score' => 'competency_pda_score',
+      'competency_tw_score' => 'competency_tw_score',
       'astra_spark_social_desirability_norm_score' => 'social_desirability_score',
       'astra_spark_infrequency_norm_score' => 'infrequency_score',
       'astra_spark_inconsistency_norm_score' => 'inconsistency_score',
