@@ -12,7 +12,7 @@
 <div class="min-h-screen bg-gray-50 py-8">
   <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="mb-8">
-      <h1 class="text-3xl font-bold text-gray-900">Buat Pengajuan MPP Baru</h1>
+      <h1 class="text-3xl font-bold text-gray-900">Buat Pengajuan MPP</h1>
       <p class="mt-2 text-gray-600">Form digital pengajuan MPP</p>
     </div>
 
